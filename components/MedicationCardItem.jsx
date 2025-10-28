@@ -13,7 +13,6 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
 
   const CheckStatus = () => {
     const data = medicine?.action?.find((item) => item.date === selectedDate);
-    console.log('--', data);
     setStatus(data);
   };
 
@@ -33,104 +32,103 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
   }
 
   return (
-    <View style={styles.subContainer}>
-      <View style={styles.container}>
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: medicine?.type?.icon }}
-            style={styles.icon}
-          />
-        </View>
+    <View style={styles.card}>
+      {/* Left image */}
+      <Image source={{ uri: medicine?.type?.icon }} style={styles.icon} />
 
-        <View style={styles.textContainer}>
-          <Text style={styles.name}>{medicine?.name}</Text>
-          <Text style={styles.when}>{medicine?.when}</Text>
-          <Text style={styles.dose}>
-            {medicine?.dose} {medicine?.type?.name}
-          </Text>
-        </View>
+      {/* Middle text info */}
+      <View style={styles.details}>
+        <Text style={styles.name}>{medicine?.name}</Text>
+        <Text style={styles.when}>{medicine?.when}</Text>
+        <Text style={styles.dose}>
+          {medicine?.dose} {medicine?.type?.name}
+        </Text>
+      </View>
 
-        {/* 🕒 Time container on the right */}
+      {/* Right side: status on top, time below */}
+      <View style={styles.rightSection}>
+        {status?.date && (
+          <View style={styles.statusIcon}>
+            {status.status === 'Taken' ? (
+              <FontAwesome name="check-circle" size={22} color={Colors.success || 'green'} />
+            ) : status.status === 'Missed' ? (
+              <FontAwesome name="times-circle" size={22} color={Colors.error || 'red'} />
+            ) : null}
+          </View>
+        )}
+
         {reminderTime ? (
           <View style={styles.timeContainer}>
-            <EvilIcons name="clock" size={20} color="black" />
+            <EvilIcons name="clock" size={18} color={Colors.d} />
             <Text style={styles.timeText}>{reminderTime}</Text>
           </View>
         ) : null}
       </View>
-
-      {/* ✅ or ❌ Status Icon */}
-      {status?.date && (
-        <View style={styles.statusIcon}>
-          {status.status === 'Taken' ? (
-            <FontAwesome name="check-circle" size={24} color="green" />
-          ) : status.status === 'Missed' ? (
-            <FontAwesome name="times-circle" size={24} color="red" />
-          ) : null}
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  subContainer: {
-    padding: 10,
-    borderWidth: 1,
-    borderColor: Colors.l,
-    marginTop: 10,
-    borderRadius: 15,
-  },
-  container: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 10,
-  },
-  imageContainer: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    marginRight: 15,
+    backgroundColor: Colors.white || '#fcfcfcff',
+    borderRadius: 20,
+    padding: 12,
+    marginVertical: 6,
+    marginHorizontal: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   icon: {
-    width: 75,
-    height: 75,
+    width: 65,
+    height: 65,
     borderRadius: 15,
+    backgroundColor: Colors.light || '#fcfcfcff',
+    marginRight: 12,
   },
-  textContainer: {
+  details: {
     flex: 1,
   },
   name: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.dark || '#222',
   },
   when: {
-    fontSize: 16,
-    color: '#333',
+    fontSize: 15,
+    color: '#555',
+    marginTop: 2,
   },
   dose: {
-    fontSize: 15,
-    color: '#666',
+    fontSize: 14,
+    color: '#777',
+    marginTop: 1,
+  },
+  rightSection: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 65,
+    paddingVertical: 2,
+  },
+  statusIcon: {
+    marginBottom: 6,
   },
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f2f2f2',
+    backgroundColor: '#F2F3F5',
     borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
   },
   timeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#000',
+    color: '#333',
     marginLeft: 4,
-  },
-  statusIcon: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    padding: 5,
   },
 });

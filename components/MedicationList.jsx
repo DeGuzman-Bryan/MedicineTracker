@@ -4,8 +4,9 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
-  Image,
+  ImageBackground,
   LayoutAnimation,
   Platform,
   StyleSheet,
@@ -14,7 +15,7 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message'; // <-- import toast
+import Toast from 'react-native-toast-message';
 import { db } from '../config/FirebaseConfig';
 import Colors from '../Constant/Colors';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
@@ -39,7 +40,6 @@ export default function MedicationList() {
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
-    // Check every 15 seconds for precise timing
     intervalRef.current = setInterval(() => {
       checkMedicineTimes();
     }, 15000);
@@ -77,8 +77,7 @@ export default function MedicationList() {
       const meds = [];
       querySnapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
       setMedList(meds);
-
-      alertedMedsRef.current.clear(); // reset alerts for new day
+      alertedMedsRef.current.clear();
     } catch (e) {
       console.log('Firestore Error:', e);
     } finally {
@@ -98,8 +97,6 @@ export default function MedicationList() {
       if (!med.time || alertedMedsRef.current.has(med.id)) return;
 
       const medTime = moment(`${selectedDate} ${med.time}`, 'MM/DD/YYYY HH:mm');
-
-      // Exact hour and minute match
       if (now.hour() === medTime.hour() && now.minute() === medTime.minute()) {
         Toast.show({
           type: 'success',
@@ -107,64 +104,85 @@ export default function MedicationList() {
           text2: `Take: ${med.name}`,
           position: 'top',
           visibilityTime: 5000,
-          autoHide: true,
         });
-
         alertedMedsRef.current.add(med.id);
       }
     });
   };
 
-  return (
-    <View style={{ flex: 1, paddingHorizontal: 15 }}>
-      <Image
-        source={require('./../assets/images/med1.jpg')}
-        style={{ width: '100%', height: 200, borderRadius: 15, marginTop: 20 }}
-      />
+  const formatDay = (day) => {
+    switch (day) {
+      case 'Mon': return 'Mon';
+      case 'Tue': return 'Tues';
+      case 'Wed': return 'Wed';
+      case 'Thu': return 'Thurs';
+      case 'Fri': return 'Fri';
+      case 'Sat': return 'Sat';
+      case 'Sun': return 'Sun';
+      default: return day;
+    }
+  };
 
+  return (
+    <View style={styles.container}>
+      {/* --- Hero Banner --- */}
+      <ImageBackground
+        source={require('./../assets/images/med1.jpg')}
+        style={styles.banner}
+        imageStyle={{ borderRadius: 20 }}
+        resizeMode="cover"
+      >
+        <View style={styles.bannerOverlay} />
+        <View style={styles.bannerTextContainer}>
+          <Text style={styles.bannerTitle}>Stay Healthy, Stay Happy</Text>
+          <Text style={styles.bannerSubtitle}>Consistency is the best medicine.</Text>
+        </View>
+      </ImageBackground>
+
+      {/* --- Date Selector --- */}
       <FlatList
         data={dateRange}
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 15 }}
-        contentContainerStyle={{ paddingHorizontal: 5 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.dateGroup,
-              {
-                backgroundColor:
-                  item.formattedDate === selectedDate ? Colors.PRIMARY : Colors.GRAY,
-                transform: [{ scale: item.formattedDate === selectedDate ? 1.08 : 1 }],
-              },
-            ]}
-            activeOpacity={0.8}
-            onPress={() => handleDatePress(item)}
-          >
-            <Text
-              style={[
-                styles.day,
-                { color: item.formattedDate === selectedDate ? 'white' : 'black' },
-              ]}
-            >
-              {item.day}
-            </Text>
+        style={styles.dateList}
+        contentContainerStyle={{ paddingHorizontal: 15 }}
+        renderItem={({ item }) => {
+          const isSelected = item.formattedDate === selectedDate;
+          const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
+          const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
 
-            <Text
+          return (
+            <TouchableOpacity
               style={[
-                styles.date,
-                { color: item.formattedDate === selectedDate ? 'white' : 'black' },
+                styles.dateButton,
+                {
+                  backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9',
+                  borderColor: isSelected ? '#8b5cf6' : '#E0E0E0',
+                },
               ]}
+              onPress={() => handleDatePress(item)}
+              activeOpacity={0.8}
             >
-              {item.date}
-            </Text>
-          </TouchableOpacity>
-        )}
+              <Text
+                style={[
+                  styles.dateLabel,
+                  { color: isSelected ? '#fff' : '#333' },
+                ]}
+              >
+                {day}, {dateNum}
+              </Text>
+            </TouchableOpacity>
+          );
+        }}
         keyExtractor={(_, index) => index.toString()}
       />
 
+      {/* --- Medication List --- */}
       {loading ? (
-        <Text style={{ textAlign: 'center', marginTop: 20 }}>Loading...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.PRIMARY} />
+          <Text style={styles.loadingText}>Loading medications...</Text>
+        </View>
       ) : medList.length === 0 ? (
         <EmptyState />
       ) : (
@@ -180,11 +198,12 @@ export default function MedicationList() {
                   params: { ...item, selectedDate },
                 })
               }
+              //style={styles.medCard}
             >
               <MedicationCardItem medicine={item} selectedDate={selectedDate} />
             </TouchableOpacity>
           )}
-          style={{ marginTop: 10 }}
+          contentContainerStyle={{ paddingBottom: 80, paddingTop: 5 }}
         />
       )}
     </View>
@@ -192,20 +211,71 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  dateGroup: {
-    width: 70,
-    paddingVertical: 10,
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+
+  // Hero Banner
+  banner: {
+    width: '100%',
+    height: 180,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginTop: 20,
+    marginBottom: 10, // slightly tighter spacing
+    justifyContent: 'flex-start',
+  },
+  bannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0)',
+  },
+  bannerTextContainer: {
+    position: 'absolute',
+    top: 25,
+    left: 20,
+  },
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  bannerSubtitle: {
+    fontSize: 12,
+    color: '#fff',
+    marginTop: 5,
+    fontStyle: 'italic',
+  },
+
+  dateList: {
+    marginVertical: 1,
+  },
+  dateButton: {
+    height: 50,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: 25,
+    marginRight: 10,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'lightgray',
-    marginRight: 8,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    flexDirection: 'row',
+    minWidth: 90,
   },
-  day: { fontSize: 16, fontWeight: '600' },
-  date: { fontSize: 20, fontWeight: 'bold' },
+  dateLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#555',
+    marginTop: 10,
+  },
 });
