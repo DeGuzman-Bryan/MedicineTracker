@@ -34,7 +34,9 @@ export default function Profile() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
+      <View style={styles.headerContainer}>
+              <Text style={styles.headerText}>Profile</Text>
+            </View>
 
       <TouchableOpacity style={styles.button} onPress={() => router.push('/History')}>
         <Text style={styles.buttonText}>History</Text>
@@ -52,8 +54,17 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 40 },
+  container: { flex: 1, paddingHorizontal: 25 },
+  headerContainer: {
+    marginTop: 45,
+    marginBottom: 20,
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#8b5cf6',
+    paddingHorizontal: 10, 
+  },
   button: {
     width: '80%',
     padding: 15,

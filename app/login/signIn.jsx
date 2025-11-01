@@ -1,97 +1,72 @@
 import { useRouter } from 'expo-router';
-import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { auth } from '../../config/FirebaseConfig';
 import Colors from '../../Constant/Colors';
-import { setLocalStorage } from '../../service/Storage';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../config/FirebaseConfig';
 
-export default function SignIn() {
+export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.replace('(tabs)');
-      } else {
-        setLoading(false);
-      }
-    });
-    return unsubscribe;
-  }, []);
 
   const onSignInClick = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+      Alert.alert('Error', 'Please fill in both fields.');
       return;
     }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      console.log('✅ Logged in user:', user.email);
-
-      // Save user data to AsyncStorage (make sure the key matches MedicationList)
-      await setLocalStorage('userDetails', user);
-
-      Alert.alert('Success', 'Logged in successfully!');
-      router.replace('(tabs)');
+      await signInWithEmailAndPassword(auth, email, password);
+      router.replace('/(tabs)/home');
     } catch (error) {
-      console.error('❌ Login error:', error);
-      if (error.code === 'auth/user-not-found') {
-        Alert.alert('Login Error', 'No account found with this email.');
-      } else if (error.code === 'auth/wrong-password') {
-        Alert.alert('Login Error', 'Incorrect password.');
-      } else {
-        Alert.alert('Login Error', error.message);
-      }
+      Alert.alert('Login Failed', error.message);
     }
   };
 
-  if (loading) return null;
-
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Let's Sign You In</Text>
-      <Text style={styles.subText}>Welcome Back</Text>
-      <Text style={styles.subText}>You've been missed!</Text>
+      <View style={styles.card}>
+        <Text style={styles.title}>Welcome Back!</Text>
+        <Text style={styles.subText}>Let’s sign you in</Text>
+        <Text style={styles.subTextSmall}>We’ve missed you!</Text>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          placeholder="Email"
-          style={styles.textInput}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-        />
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            placeholder="Enter your email"
+            style={styles.textInput}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            placeholderTextColor={Colors.GRAY}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            placeholder="Enter your password"
+            style={styles.textInput}
+            secureTextEntry
+            onChangeText={setPassword}
+            value={password}
+            placeholderTextColor={Colors.GRAY}
+          />
+        </View>
+
+        <TouchableOpacity style={styles.button} onPress={onSignInClick}>
+          <Text style={styles.buttonText}>Login</Text>
+        </TouchableOpacity>
+
+        <View style={styles.signupPrompt}>
+          <Text style={styles.promptText}>Don’t have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/login/signUp')}>
+            <Text style={styles.signupText}>Sign Up</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          placeholder="Password"
-          style={styles.textInput}
-          secureTextEntry
-          onChangeText={setPassword}
-          value={password}
-        />
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={onSignInClick}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.buttonCreate}
-        onPress={() => router.push('/login/signUp')}
-      >
-        <Text style={styles.buttonCreateText}>Create Account</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -99,62 +74,81 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'flex-start',
-    paddingTop: 40,
-    paddingLeft: 20,
-    paddingRight: 20,
+    backgroundColor: '#f7f8fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 4,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  subText: {
-    fontSize: 20,
-    marginTop: 5,
-    color: Colors.GRAY,
-  },
-  inputContainer: {
-    marginTop: 25,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 6,
-    color: '#333',
-  },
-  textInput: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Colors.GRAY,
-    borderRadius: 10,
-    fontSize: 16,
-    marginTop: 5,
-    backgroundColor: 'white',
-  },
-  button: {
-    padding: 15,
-    backgroundColor: Colors.PRIMARY,
-    borderRadius: 10,
-    marginTop: 35,
-  },
-  buttonText: {
-    fontSize: 17,
-    color: 'white',
-    textAlign: 'center',
-  },
-  buttonCreate: {
-    padding: 15,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: Colors.PRIMARY,
-  },
-  buttonCreateText: {
-    fontSize: 17,
     color: Colors.PRIMARY,
     textAlign: 'center',
+  },
+  subText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: Colors.GRAY_DARK,
+    marginTop: 5,
+  },
+  subTextSmall: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: Colors.GRAY,
+    marginBottom: 20,
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 14,
+    color: Colors.GRAY_DARK,
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 50,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    color: Colors.DARK_TEXT,
+  },
+  button: {
+    backgroundColor: Colors.PRIMARY,
+    paddingVertical: 14,
+    borderRadius: 50,
+    marginTop: 15,
+  },
+  buttonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  signupPrompt: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  promptText: {
+    fontSize: 15,
+    color: Colors.GRAY_DARK,
+  },
+  signupText: {
+    fontSize: 15,
+    color: Colors.PRIMARY,
+    fontWeight: '600',
   },
 });
