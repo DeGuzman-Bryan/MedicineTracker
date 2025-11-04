@@ -22,7 +22,7 @@ export default function Profile() {
             await AsyncStorage.clear();
 
             // 3. Redirect to SignIn
-            router.replace('/login/index'); // make sure this path matches your SignIn screen
+            router.replace('/login'); // make sure this path matches your SignIn screen
           } catch (error) {
             console.error('Logout error:', error);
             Alert.alert('Error', 'Failed to logout. Please try again.');

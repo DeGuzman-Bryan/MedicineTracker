@@ -58,7 +58,6 @@ export default function AddMedicationForm() {
       return;
     }
 
-    // ✅ Ensure all dates are formatted strings
     const dates = getDatesRange(formData?.startDate, formData.endDate).map((d) =>
       typeof d === 'string' ? d : FormatDate(d)
     );
@@ -70,7 +69,7 @@ export default function AddMedicationForm() {
         docId,
         startDate: FormatDate(formData.startDate),
         endDate: FormatDate(formData.endDate),
-        dates: dates, // ✅ formatted date strings for easy querying
+        dates: dates,
       });
 
       Alert.alert('Success', 'Medication added successfully!', [{ text: 'OK' }]);
@@ -82,39 +81,42 @@ export default function AddMedicationForm() {
   };
 
   return (
-    <ScrollView style={{ padding: 25 }} keyboardShouldPersistTaps="handled">
-      <Text style={styles.header}>Add New Medication</Text>
-
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 50 }}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Medicine Name */}
       <View style={styles.inputGroup}>
-        <Ionicons style={styles.icon} name="medkit-outline" size={24} color="black" />
+        <Ionicons style={styles.icon} name="medkit-outline" size={22} />
         <TextInput
           style={styles.textInput}
-          placeholder=" Medicine Name"
+          placeholder="Medicine Name"
+          placeholderTextColor="#999"
           value={formData.name || ''}
           onChangeText={(value) => onHandleInputChange('name', value)}
         />
       </View>
 
       {/* Medicine Type */}
+      <Text style={styles.label}>Type</Text>
       <FlatList
         data={TypeList}
         horizontal
-        style={{ marginTop: 5 }}
         showsHorizontalScrollIndicator={false}
+        style={{ marginVertical: 5 }}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[
-              styles.inputGroup,
-              { marginRight: 10 },
-              { backgroundColor: item.name === formData?.type?.name ? Colors.PRIMARY : 'white' },
+              styles.typeChip,
+              item.name === formData?.type?.name && styles.typeChipActive,
             ]}
             onPress={() => onHandleInputChange('type', item)}
           >
             <Text
               style={[
                 styles.typeText,
-                { color: item.name === formData?.type?.name ? 'white' : 'black' },
+                item.name === formData?.type?.name && styles.typeTextActive,
               ]}
             >
               {item?.name}
@@ -126,22 +128,24 @@ export default function AddMedicationForm() {
 
       {/* Dose */}
       <View style={styles.inputGroup}>
-        <Ionicons style={styles.icon} name="eyedrop-outline" size={24} color="black" />
+        <Ionicons style={styles.icon} name="eyedrop-outline" size={22} />
         <TextInput
           style={styles.textInput}
-          placeholder=" Dose Ex. 2, 5ml"
+          placeholder="Dose (e.g. 2 tablets, 5ml)"
+          placeholderTextColor="#999"
           value={formData.dose || ''}
           onChangeText={(value) => onHandleInputChange('dose', value)}
         />
       </View>
 
       {/* When to Take */}
-      <View style={styles.inputGroup}>
-        <AntDesign style={styles.icon} name="field-time" size={24} color="black" />
+      <Text style={styles.label}>When to Take</Text>
+      <View style={[styles.inputGroup, { paddingRight: 0 }]}>
+        <AntDesign style={styles.icon} name="field-time" size={22} />
         <Picker
           selectedValue={formData?.when || ''}
           onValueChange={(itemValue) => onHandleInputChange('when', itemValue)}
-          style={{ width: '90%' }}
+          style={{ flex: 1 }}
         >
           {WhenToTake.map((item, index) => (
             <Picker.Item key={index} label={item} value={item} />
@@ -150,16 +154,17 @@ export default function AddMedicationForm() {
       </View>
 
       {/* Start & End Dates */}
+      <Text style={styles.label}>Duration</Text>
       <View style={styles.dateGroup}>
         <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowStartDate(true)}>
-          <AntDesign style={styles.icon} name="calendar" size={24} color="black" />
+          <AntDesign style={styles.icon} name="calendar" size={22} />
           <Text style={styles.text}>
             {formData?.startDate ? FormatDateForText(formData?.startDate) : 'Start Date'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowEndDate(true)}>
-          <AntDesign style={styles.icon} name="calendar" size={24} color="black" />
+          <AntDesign style={styles.icon} name="calendar" size={22} />
           <Text style={styles.text}>
             {formData?.endDate ? FormatDateForText(formData?.endDate) : 'End Date'}
           </Text>
@@ -167,16 +172,18 @@ export default function AddMedicationForm() {
       </View>
 
       {/* Reminder Time */}
-      <View style={styles.dateGroup}>
-        <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowTimePicker(true)}>
-          <FontAwesome6 style={styles.icon} name="user-clock" size={24} color="black" />
-          <Text style={styles.text}>
-            {formData?.reminder
-              ? new Date(formData.reminder).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Select Reminder Time'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.label}>Reminder Time</Text>
+      <TouchableOpacity style={styles.inputGroup} onPress={() => setShowTimePicker(true)}>
+        <FontAwesome6 style={styles.icon} name="user-clock" size={22} />
+        <Text style={styles.text}>
+          {formData?.reminder
+            ? new Date(formData.reminder).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : 'Select Reminder Time'}
+        </Text>
+      </TouchableOpacity>
 
       {/* DateTime Pickers */}
       {showStartDate && (
@@ -184,7 +191,8 @@ export default function AddMedicationForm() {
           minimumDate={new Date()}
           mode="date"
           onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('startDate', FormatDate(selectedDate));
+            if (event.type === 'set' && selectedDate)
+              onHandleInputChange('startDate', FormatDate(selectedDate));
             setShowStartDate(false);
           }}
           value={formData?.startDate ? new Date(formData.startDate) : new Date()}
@@ -196,7 +204,8 @@ export default function AddMedicationForm() {
           minimumDate={new Date()}
           mode="date"
           onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('endDate', FormatDate(selectedDate));
+            if (event.type === 'set' && selectedDate)
+              onHandleInputChange('endDate', FormatDate(selectedDate));
             setShowEndDate(false);
           }}
           value={formData?.endDate ? new Date(formData.endDate) : new Date()}
@@ -207,7 +216,8 @@ export default function AddMedicationForm() {
         <RNDateTimePicker
           mode="time"
           onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('reminder', selectedDate);
+            if (event.type === 'set' && selectedDate)
+              onHandleInputChange('reminder', selectedDate);
             setShowTimePicker(false);
           }}
           value={formData?.reminder ? new Date(formData.reminder) : new Date()}
@@ -215,29 +225,93 @@ export default function AddMedicationForm() {
       )}
 
       <TouchableOpacity style={styles.button} onPress={SaveMedication}>
-        <Text style={styles.buttonText}>Add new Medication</Text>
+        <Text style={styles.buttonText}>Save Medication</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { fontSize: 25, fontWeight: 'bold' },
+  container: {
+    padding: 20,
+    backgroundColor: '#F9FAFB',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 15,
+    marginBottom: 5,
+    color: '#555',
+  },
   inputGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    marginTop: 10,
+    backgroundColor: 'white',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  textInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#111',
+  },
+  icon: {
+    color: '#8b5cf6',
+    marginRight: 10,
+  },
+  text: {
+    fontSize: 16,
+    color: '#111',
+    marginLeft: 5,
+  },
+  typeChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+    marginRight: 10,
     backgroundColor: 'white',
   },
-  textInput: { flex: 1, marginLeft: 10, fontSize: 16 },
-  icon: { color: Colors.PRIMARY, borderRightWidth: 1, paddingRight: 12, borderColor: '#E5E7EB' },
-  typeText: { fontSize: 16 },
-  text: { fontSize: 16, padding: 10, flex: 1, marginLeft: 10 },
-  dateGroup: { flexDirection: 'row', gap: 10 },
-  button: { padding: 15, backgroundColor: Colors.PRIMARY, borderRadius: 15, width: '100%', marginTop: 25 },
-  buttonText: { fontSize: 17, color: 'white', textAlign: 'center' },
+  typeChipActive: {
+    backgroundColor: '#8b5cf6',
+  },
+  typeText: {
+    fontSize: 15,
+    color: '#8b5cf6',
+  },
+  typeTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  dateGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  button: {
+    padding: 15,
+    backgroundColor: '#8b5cf6',
+    borderRadius: 50,
+    marginTop: 25,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  buttonText: {
+    fontSize: 17,
+    color: 'white',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });

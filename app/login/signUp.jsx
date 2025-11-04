@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Colors from "../../Constant/Colors";
 import { setLocalStorage } from "../../service/Storage";
+
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../../config/FirebaseConfig";
@@ -33,11 +34,14 @@ export default function SignUp() {
     }
 
     try {
+      // ✅ Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // ✅ Update Firebase Auth display name
       await updateProfile(user, { displayName: userName });
 
+      // ✅ Store minimal user info in Firestore
       await setDoc(doc(db, "users", user.uid), {
         fullName,
         userName,
@@ -45,17 +49,23 @@ export default function SignUp() {
         createdAt: new Date(),
       });
 
+      // ✅ Save user in local storage (same key used in SignIn.js)
       await setLocalStorage("userDetails", {
         uid: user.uid,
         email: user.email,
         displayName: userName,
       });
 
+      console.log("✅ Account created successfully:", user.email);
       Alert.alert("Success", "Account created successfully!", [
-        { text: "OK", onPress: () => router.replace("(tabs)") },
+        {
+          text: "OK",
+          onPress: () => router.replace("(tabs)"), // Directly go to home screen
+        },
       ]);
     } catch (error) {
-      console.error("Signup Error:", error);
+      console.error("❌ Signup Error:", error);
+
       if (error.code === "auth/email-already-in-use") {
         Alert.alert("Signup Error", "Email is already in use.");
       } else {
@@ -66,67 +76,66 @@ export default function SignUp() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subText}>Join us and start tracking your medication</Text>
+      <View style={styles.form}>
+      <Text style={styles.title}>Create New Account</Text>
+      <Text style={styles.subText}>Join us to start tracking your medications!</Text>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Full Name</Text>
+        <TextInput
+          placeholder="Full Name"
+          style={styles.textInput}
+          onChangeText={setFullName}
+          value={fullName}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            placeholder="Enter your full name"
-            style={styles.textInput}
-            onChangeText={setFullName}
-            value={fullName}
-            placeholderTextColor={Colors.GRAY}
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Username</Text>
+        <TextInput
+          placeholder="Username"
+          style={styles.textInput}
+          onChangeText={setUserName}
+          value={userName}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput
-            placeholder="Enter your username"
-            style={styles.textInput}
-            onChangeText={setUserName}
-            value={userName}
-            placeholderTextColor={Colors.GRAY}
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          placeholder="Email"
+          style={styles.textInput}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            placeholder="Enter your email"
-            style={styles.textInput}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            placeholderTextColor={Colors.GRAY}
-          />
-        </View>
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          placeholder="Password"
+          style={styles.textInput}
+          onChangeText={setPassword}
+          secureTextEntry
+          value={password}
+        />
+      </View>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Enter your password"
-            style={styles.textInput}
-            onChangeText={setPassword}
-            secureTextEntry
-            value={password}
-            placeholderTextColor={Colors.GRAY}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.button} onPress={OnCreateAccount}>
-          <Text style={styles.buttonText}>Sign Up</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/login/signIn")}>
-          <Text style={styles.footerText}>
-            Already have an account?{" "}
-            <Text style={styles.linkText}>Sign In</Text>
+      <TouchableOpacity style={styles.button} onPress={OnCreateAccount}>
+        <Text style={styles.buttonText}>Create Account</Text>
+      </TouchableOpacity>
+        <View style={styles.textLinkContainer}>
+          <Text style={styles.textLink}>
+            Already have an account?{' '}
+            <Text
+              style={styles.textLinkHighlight}
+                onPress={() => router.push('/login/signIn')}
+            >
+              Sign In
+            </Text>
           </Text>
-        </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -134,73 +143,71 @@ export default function SignUp() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: "#f7f8fa",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: "100%",
-    backgroundColor: "white",
+      flex: 1,
+      backgroundColor: Colors.BACKGROUND || '#F8FAFC',
+      paddingHorizontal: 25,
+      justifyContent: 'center',
+  },  
+  form: {
+    backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 25,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-    elevation: 4,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: Colors.PRIMARY,
-    textAlign: "center",
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#8b5cf6',
+    textAlign: 'center',
   },
   subText: {
-    fontSize: 16,
-    textAlign: "center",
-    color: Colors.GRAY_DARK,
-    marginTop: 5,
-    marginBottom: 20,
+    fontSize: 14,
+    fontWeight: '400',
+    color: 'gray',
+    textAlign: 'center',
   },
   inputContainer: {
-    marginBottom: 15,
+    marginTop: 25,
   },
   label: {
-    fontSize: 14,
-    color: Colors.GRAY_DARK,
+    fontSize: 16,
     marginBottom: 6,
+    color: "#333",
   },
   textInput: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 50,
     padding: 12,
-    fontSize: 16,
     borderWidth: 1,
-    borderColor: "#ddd",
-    color: Colors.DARK_TEXT,
+    borderColor: Colors.GRAY,
+    borderRadius: 50,
+    fontSize: 16,
+    backgroundColor: "white",
   },
   button: {
-    backgroundColor: Colors.PRIMARY,
-    paddingVertical: 14,
+    padding: 15,
+    backgroundColor: '#8b5cf6',
     borderRadius: 50,
-    marginTop: 15,
+    marginTop: 35,
   },
   buttonText: {
+    fontSize: 17,
     color: "white",
     textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
   },
-  footerText: {
-    textAlign: "center",
-    color: Colors.GRAY_DARK,
+  textLinkContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  textLink: {
     fontSize: 15,
-    marginTop: 18,
+    color: 'gray',
   },
-  linkText: {
-    color: Colors.PRIMARY,
-    fontWeight: "600",
+  textLinkHighlight: {
+    color: '#8b5cf6',
+    fontWeight: '600',
   },
 });
