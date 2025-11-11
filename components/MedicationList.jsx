@@ -213,7 +213,7 @@ export default function MedicationList() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f3f1ff',
   },
 
   // Hero Banner

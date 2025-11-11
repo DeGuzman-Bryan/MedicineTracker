@@ -1,11 +1,13 @@
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Colors from '../Constant/Colors';
 
 export default function MedicationCardItem({ medicine, selectedDate = '' }) {
   const [status, setStatus] = useState();
+  const router = useRouter();
 
   useEffect(() => {
     CheckStatus();
@@ -31,6 +33,13 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
     }
   }
 
+  const handleEdit = () => {
+    router.push({
+      pathname: '/add-new-medication/edit-medicine',
+      params: { medicine: JSON.stringify(medicine) }, // ✅ pass the data as string
+    });
+  };
+
   return (
     <View style={styles.card}>
       {/* Left image */}
@@ -47,6 +56,11 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
 
       {/* Right side: status on top, time below */}
       <View style={styles.rightSection}>
+        {/* Edit Button */}
+        <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
+          <EvilIcons name="pencil" size={26} color={Colors.primary || '#8b5cf6'} />
+        </TouchableOpacity>
+
         {status?.date && (
           <View style={styles.statusIcon}>
             {status.status === 'Taken' ? (
@@ -116,6 +130,12 @@ const styles = StyleSheet.create({
   },
   statusIcon: {
     marginBottom: 6,
+  },
+  editButton: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#f4f3ff',
+    marginBottom: 5,
   },
   timeContainer: {
     flexDirection: 'row',
