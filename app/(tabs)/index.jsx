@@ -6,7 +6,7 @@ export default function HomeScreen() {
   return (
     <View style={{
       padding: 25,
-      backgroundColor: 'white',
+      backgroundColor: '#f3f1ff',
       height: '100%',
       width: '100%',
     }}>

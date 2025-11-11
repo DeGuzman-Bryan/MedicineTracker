@@ -50,11 +50,11 @@ export default function MedicationHistory() {
         <Text style={styles.subText}>Track your past medication activities</Text>
       </View>
 
-      {/* Banner Image */}
+      {/* Banner Image 
       <Image
         source={require('../../assets/images/sign.jpg')}
         style={styles.bannerImage}
-      />
+      />*/}
 
       {/* Medication List */}
       {medList.length === 0 ? (
@@ -96,7 +96,7 @@ export default function MedicationHistory() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f3f1ff',
     paddingHorizontal: 25, // ✅ Apply 25 padding globally
   },
   headerContainer: {
