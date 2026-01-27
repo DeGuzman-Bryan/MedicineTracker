@@ -1,14 +1,40 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons'; // Added for the trash icon
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { arrayUnion, doc, updateDoc } from 'firebase/firestore'; // ✅ FIXED: use firestore, not firestore/lite
+import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 
 export default function Index() {
-  const { selectedDate, reminder, docId } = useLocalSearchParams(); // ✅ Get docId directly
+  const { selectedDate, reminder, docId } = useLocalSearchParams(); 
   const router = useRouter();
+
+  const onDeletePress = () => {
+    Alert.alert(
+      'Delete Medication',
+      'Are you sure you want to delete this medication permanently?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              const docRef = doc(db, 'medication', docId);
+              await deleteDoc(docRef);
+              Alert.alert('Deleted', 'Medication removed successfully.');
+              router.replace('(tabs)'); 
+            } catch (e) {
+              console.log(e);
+              Alert.alert('Error', 'Could not delete medication.');
+            }
+          } 
+        },
+      ]
+    );
+  };
 
   const UpdateActionStatus = async (status) => {
     try {
@@ -17,7 +43,7 @@ export default function Index() {
         return;
       }
 
-      const docRef = doc(db, 'medication', docId); // ✅ Use docId from params
+      const docRef = doc(db, 'medication', docId); 
       await updateDoc(docRef, {
         action: arrayUnion({
           status: status,
@@ -26,7 +52,6 @@ export default function Index() {
         }),
       });
 
-      // ✅ Works both iOS + Android
       Alert.alert(
         status,
         'Response saved successfully!',
@@ -40,7 +65,7 @@ export default function Index() {
       );
     } catch (e) {
       console.log('Error updating status:', e);
-      Alert.alert('Error', 'Failed to update status. Please try again.');
+      Alert.alert('Error', 'Failed to update status.');
     }
   };
 
@@ -67,9 +92,7 @@ export default function Index() {
       />
 
       <Text style={styles.dateText}>{selectedDate || 'No date selected'}</Text>
-
       <Text style={styles.reminderText}>{formattedTime}</Text>
-
       <Text style={styles.subText}>It's time to take</Text>
 
       <View style={styles.buttonRow}>
@@ -89,6 +112,15 @@ export default function Index() {
           <Text style={styles.takenText}>Taken</Text>
         </TouchableOpacity>
       </View>
+
+      {/* --- RED DELETE OPTION --- */}
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={onDeletePress}
+      >
+        <MaterialIcons name="delete-forever" size={24} color="#ff4444" />
+        <Text style={styles.deleteText}>Delete Medication</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         onPress={() => router.back()}
@@ -162,4 +194,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  // --- UPDATED RED STYLES ---
+  deleteBtn: {
+    marginTop: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+  },
+  deleteText: {
+    color: '#ff4444', // Red Text
+    fontSize: 17,
+    fontWeight: 'bold',
+  }
 });

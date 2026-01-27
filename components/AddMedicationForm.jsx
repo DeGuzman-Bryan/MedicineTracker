@@ -17,7 +17,6 @@ import {
   View,
 } from 'react-native';
 import { db } from '../config/FirebaseConfig';
-import Colors from '../Constant/Colors';
 import { TypeList, WhenToTake } from '../Constant/Options';
 import { FormatDate, FormatDateForText, getDatesRange } from '../service/ConvertDateTime';
 
