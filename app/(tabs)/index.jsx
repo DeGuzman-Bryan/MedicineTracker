@@ -1,4 +1,4 @@
-import { View } from 'react-native'; // ✅ added this line
+import { View } from 'react-native';
 import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 

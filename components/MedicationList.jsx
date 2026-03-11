@@ -40,6 +40,7 @@ export default function MedicationList() {
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
+    // Check for medicine reminders every 15 seconds
     intervalRef.current = setInterval(() => {
       checkMedicineTimes();
     }, 15000);
@@ -67,6 +68,8 @@ export default function MedicationList() {
       }
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
+      
+      // Fetching meds specifically for the selected date
       const q = query(
         collection(db, 'medication'),
         where('userEmail', '==', user.email),
@@ -76,8 +79,9 @@ export default function MedicationList() {
       const querySnapshot = await getDocs(q);
       const meds = [];
       querySnapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
+      
       setMedList(meds);
-      alertedMedsRef.current.clear();
+      alertedMedsRef.current.clear(); // Reset alerts when switching dates
     } catch (e) {
       console.log('Firestore Error:', e);
     } finally {
@@ -93,15 +97,19 @@ export default function MedicationList() {
 
   const checkMedicineTimes = () => {
     const now = moment();
-    medList.forEach((med) => {
-      if (!med.time || alertedMedsRef.current.has(med.id)) return;
+    const currentFormattedTime = now.format('hh:mm A'); 
 
-      const medTime = moment(`${selectedDate} ${med.time}`, 'MM/DD/YYYY HH:mm');
-      if (now.hour() === medTime.hour() && now.minute() === medTime.minute()) {
+    medList.forEach((med) => {
+      // Use 'reminder' as primary, fallback to 'time' for older records
+      const medReminder = med.reminder || med.time;
+      
+      if (!medReminder || alertedMedsRef.current.has(med.id)) return;
+
+      if (currentFormattedTime === medReminder) {
         Toast.show({
           type: 'success',
-          text1: '💊 Time to take your medicine',
-          text2: `Take: ${med.name}`,
+          text1: '💊 Time for Medication',
+          text2: `Take: ${med.name} ${med.dose ? `(${med.dose})` : ''}`,
           position: 'top',
           visibilityTime: 5000,
         });
@@ -111,16 +119,11 @@ export default function MedicationList() {
   };
 
   const formatDay = (day) => {
-    switch (day) {
-      case 'Mon': return 'Mon';
-      case 'Tue': return 'Tues';
-      case 'Wed': return 'Wed';
-      case 'Thu': return 'Thurs';
-      case 'Fri': return 'Fri';
-      case 'Sat': return 'Sat';
-      case 'Sun': return 'Sun';
-      default: return day;
-    }
+    const days = {
+      'Mon': 'Mon', 'Tue': 'Tues', 'Wed': 'Wed', 
+      'Thu': 'Thurs', 'Fri': 'Fri', 'Sat': 'Sat', 'Sun': 'Sun'
+    };
+    return days[day] || day;
   };
 
   return (
@@ -198,7 +201,6 @@ export default function MedicationList() {
                   params: { ...item, selectedDate },
                 })
               }
-              //style={styles.medCard}
             >
               <MedicationCardItem medicine={item} selectedDate={selectedDate} />
             </TouchableOpacity>
@@ -211,71 +213,15 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-
-  // Hero Banner
-  banner: {
-    width: '100%',
-    height: 180,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginTop: 20,
-    marginBottom: 10, // slightly tighter spacing
-    justifyContent: 'flex-start',
-  },
-  bannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0)',
-  },
-  bannerTextContainer: {
-    position: 'absolute',
-    top: 25,
-    left: 20,
-  },
-  bannerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  bannerSubtitle: {
-    fontSize: 12,
-    color: '#fff',
-    marginTop: 5,
-    fontStyle: 'italic',
-  },
-
-  dateList: {
-    marginVertical: 1,
-  },
-  dateButton: {
-    height: 50,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 25,
-    marginRight: 10,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    minWidth: 90,
-  },
-  dateLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: 50,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#555',
-    marginTop: 10,
-  },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 20, marginBottom: 10, justifyContent: 'flex-start' },
+  bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0)' },
+  bannerTextContainer: { position: 'absolute', top: 25, left: 20 },
+  bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  bannerSubtitle: { fontSize: 12, color: '#fff', marginTop: 5, fontStyle: 'italic' },
+  dateList: { marginVertical: 1 },
+  dateButton: { height: 50, paddingHorizontal: 16, borderRadius: 25, marginRight: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center', minWidth: 90 },
+  dateLabel: { fontSize: 15, fontWeight: '600' },
+  loadingContainer: { flex: 1, alignItems: 'center', marginTop: 50 },
+  loadingText: { fontSize: 16, color: '#555', marginTop: 10 },
 });

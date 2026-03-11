@@ -18,6 +18,7 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
 
   let reminderTime = '';
 
+  // Handle reminder time (could be Firestore timestamp or String from our new form)
   if (medicine?.reminder) {
     if (medicine.reminder.seconds) {
       const date = new Date(medicine.reminder.seconds * 1000);
@@ -31,18 +32,34 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
     }
   }
 
+  // --- FALLBACKS FOR OPTIONAL FIELDS ---
+  // If no icon is provided, we use a generic placeholder image
+  const defaultIcon = 'https://cdn-icons-png.flaticon.com/512/822/822143.png'; 
+  const iconUri = medicine?.type?.icon || medicine?.type || defaultIcon;
+
   return (
     <View style={styles.card}>
-      {/* Left image */}
-      <Image source={{ uri: medicine?.type?.icon }} style={styles.icon} />
+      {/* Left image - Now with safety fallback */}
+      <Image 
+        source={{ uri: typeof iconUri === 'string' ? iconUri : defaultIcon }} 
+        style={styles.icon} 
+      />
 
       {/* Middle text info */}
       <View style={styles.details}>
         <Text style={styles.name}>{medicine?.name}</Text>
-        <Text style={styles.when}>{medicine?.when}</Text>
-        <Text style={styles.dose}>
-          {medicine?.dose} {medicine?.type?.name}
-        </Text>
+        
+        {/* Only show "When" if it exists */}
+        {medicine?.when ? (
+          <Text style={styles.when}>{medicine?.when}</Text>
+        ) : null}
+
+        {/* Show Dose and Type only if they exist */}
+        {(medicine?.dose || medicine?.type) && (
+          <Text style={styles.dose}>
+            {medicine?.dose || ''} {medicine?.type?.name || (typeof medicine?.type === 'string' ? medicine.type : '')}
+          </Text>
+        )}
       </View>
 
       {/* Right side: status on top, time below */}
@@ -59,7 +76,7 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
 
         {reminderTime ? (
           <View style={styles.timeContainer}>
-            <EvilIcons name="clock" size={18} color={Colors.d} />
+            <EvilIcons name="clock" size={18} color={Colors.dark || '#333'} />
             <Text style={styles.timeText}>{reminderTime}</Text>
           </View>
         ) : null}
@@ -72,7 +89,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white || '#fcfcfcff',
+    backgroundColor: Colors.white || '#fff',
     borderRadius: 20,
     padding: 12,
     marginVertical: 6,
@@ -81,13 +98,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    elevation: 2,
   },
   icon: {
-    width: 65,
-    height: 65,
+    width: 60,
+    height: 60,
     borderRadius: 15,
-    backgroundColor: Colors.light || '#fcfcfcff',
+    backgroundColor: '#F2F3F5',
     marginRight: 12,
   },
   details: {
@@ -99,19 +116,19 @@ const styles = StyleSheet.create({
     color: Colors.dark || '#222',
   },
   when: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#555',
     marginTop: 2,
   },
   dose: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#777',
     marginTop: 1,
   },
   rightSection: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 65,
+    height: 60,
     paddingVertical: 2,
   },
   statusIcon: {
@@ -126,7 +143,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   timeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#333',
     marginLeft: 4,
