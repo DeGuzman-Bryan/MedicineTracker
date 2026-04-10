@@ -3,17 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
 
@@ -21,8 +22,6 @@ export default function Profile() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // States for Caregiver Linking
   const [isModalVisible, setModalVisible] = useState(false);
   const [patientCode, setPatientCode] = useState('');
   const [linking, setLinking] = useState(false);
@@ -43,13 +42,13 @@ export default function Profile() {
         setUserData(userSnap.data());
       }
     } catch (err) {
-      console.error('Error fetching user data:', err);
+      console.error('Error fetching:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Function for Caregiver to Link a Patient
+  // ✅ Link or CHANGE a Patient
   const handleLinkPatient = async () => {
     if (!patientCode.trim()) {
       Alert.alert("Error", "Please enter a code.");
@@ -61,7 +60,7 @@ export default function Profile() {
       const patientSnap = await getDoc(patientRef);
 
       if (!patientSnap.exists()) {
-        Alert.alert("Error", "Invalid Patient Code. Please check the code and try again.");
+        Alert.alert("Error", "Invalid Patient Code.");
         return;
       }
 
@@ -70,47 +69,58 @@ export default function Profile() {
       
       const updateData = {
         linkedPatientId: patientCode.trim(),
+        linkedPatientEmail: patientData.email, 
         linkedPatientName: patientData.fullName || patientData.userName
       };
 
       await updateDoc(caregiverRef, updateData);
-      Alert.alert("Success!", `You are now monitoring ${updateData.linkedPatientName}`);
+      Alert.alert("Success", `Now monitoring ${updateData.linkedPatientName}`);
       setModalVisible(false);
       setPatientCode('');
-      fetchUserData(); // Refresh UI
+      fetchUserData(); 
     } catch (err) {
-      Alert.alert("Error", "Could not link patient.");
+      Alert.alert("Error", "Failed to link.");
     } finally {
       setLinking(false);
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+  // ✅ NEW: Disconnect current patient
+  const handleDisconnect = async () => {
+    Alert.alert('Disconnect', 'Stop monitoring this patient?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
+      { 
+        text: 'Stop', 
+        style: 'destructive', 
         onPress: async () => {
-          try {
-            await signOut(auth);
-            await AsyncStorage.removeItem('userDetails');
-            router.replace('/login/signIn');
-          } catch (error) {
-            Alert.alert('Error', 'Failed to logout.');
-          }
-        },
-      },
+          const userRef = doc(db, 'users', auth.currentUser.uid);
+          await updateDoc(userRef, {
+            linkedPatientId: deleteField(),
+            linkedPatientEmail: deleteField(),
+            linkedPatientName: deleteField()
+          });
+          fetchUserData();
+        } 
+      }
     ]);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-      </View>
-    );
-  }
+  const onShareID = async () => {
+    await Share.share({ message: `My Patient Code: ${auth.currentUser.uid}` });
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Are you sure?', [
+      { text: 'Cancel' },
+      { text: 'Logout', onPress: async () => {
+          await signOut(auth);
+          await AsyncStorage.removeItem('userDetails');
+          router.replace('/login/signIn');
+      }}
+    ]);
+  };
+
+  if (loading) return <ActivityIndicator size="large" style={{flex:1}} />;
 
   return (
     <View style={styles.container}>
@@ -120,73 +130,60 @@ export default function Profile() {
 
       {userData && (
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
-          </View>
+          <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
           <Text style={styles.name}>{userData.fullName}</Text>
           <Text style={styles.username}>@{userData.userName}</Text>
           
-          <View style={styles.roleBox}>
-             <Text style={styles.roleLabel}>ROLE: {userData.role?.toUpperCase()}</Text>
-          </View>
+          <View style={styles.roleBox}><Text style={styles.roleLabel}>{userData.role?.toUpperCase()}</Text></View>
 
-          {/* ✅ CAREGIVER SECTION: Input for Patient Code */}
+          {/* CAREGIVER SECTION */}
           {userData.role === 'caregiver' && (
-            <View style={styles.linkContainer}>
+            <View style={{ width: '100%' }}>
               {userData.linkedPatientName ? (
-                <View style={styles.monitoringBox}>
-                  <Ionicons name="checkmark-circle" size={20} color="green" />
-                  <Text style={styles.monitoringText}> Monitoring: {userData.linkedPatientName}</Text>
+                <View style={styles.monitorCard}>
+                  <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
+                      <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
+                      <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : (
                 <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
-                  <Ionicons name="link-outline" size={18} color="#fff" />
-                  <Text style={styles.linkBtnText}> Link to Patient</Text>
+                  <Text style={styles.linkBtnText}>Link to Patient</Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
 
-          <TouchableOpacity style={styles.editButton} onPress={() => router.push('/editProfile/edit-profile')}>
-            <Ionicons name="create-outline" size={18} color="#fff" />
-            <Text style={styles.editButtonText}> Edit Profile</Text>
-          </TouchableOpacity>
+          {/* PATIENT SECTION */}
+          {userData.role === 'patient' && (
+            <View style={styles.idBox}>
+              <Text style={styles.idLabel}>YOUR PATIENT CODE:</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
+                <TouchableOpacity onPress={onShareID}><Ionicons name="share-social" size={18} color="#8b5cf6" /></TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
-      {/* Navigation */}
-      <TouchableOpacity style={styles.button} onPress={() => router.push('/')}>
-        <Ionicons name="home-outline" size={18} color="#fff" />
-        <Text style={styles.buttonText}>  Home</Text>
-      </TouchableOpacity>
+      <TouchableOpacity style={styles.btnHome} onPress={() => router.push('/')}><Text style={styles.btnText}>Home</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}><Text style={styles.btnText}>Logout</Text></TouchableOpacity>
 
-      <TouchableOpacity style={[styles.button, styles.logout]} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={18} color="#fff" />
-        <Text style={styles.buttonText}>  Logout</Text>
-      </TouchableOpacity>
-
-      {/* ✅ LINKING MODAL */}
-      <Modal visible={isModalVisible} transparent animationType="slide">
+      <Modal visible={isModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Link Patient</Text>
-            <Text style={styles.modalSub}>Enter the unique code from the Patient's profile.</Text>
-            
-            <TextInput 
-              style={styles.input}
-              placeholder="Paste Patient Code Here"
-              value={patientCode}
-              onChangeText={setPatientCode}
-              autoCapitalize="none"
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleLinkPatient}>
-                {linking ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmBtnText}>Link Now</Text>}
+            <Text style={styles.modalTitle}>Enter Patient Code</Text>
+            <TextInput style={styles.input} placeholder="Paste ID here" value={patientCode} onChangeText={setPatientCode} autoCapitalize="none" />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Text>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
+                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff'}}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -197,39 +194,31 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 25, backgroundColor: '#f3f1ff' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerContainer: { marginTop: 45, marginBottom: 20, alignItems: 'center' },
-  headerText: { fontSize: 26, fontWeight: '700', color: '#5b21b6' },
-  profileCard: { backgroundColor: '#fff', padding: 25, borderRadius: 20, alignItems: 'center', marginBottom: 25, elevation: 5 },
-  avatarContainer: { backgroundColor: '#ede9fe', borderRadius: 100, padding: 5, marginBottom: 10 },
-  name: { fontSize: 22, fontWeight: 'bold', color: '#333' },
-  username: { color: '#6b7280', marginBottom: 2 },
-  roleBox: { marginVertical: 10, padding: 8, backgroundColor: '#f4f4f4', borderRadius: 8 },
-  roleLabel: { fontWeight: 'bold', color: '#8b5cf6', fontSize: 13 },
-  
-  // Caregiver Link Styles
-  linkContainer: { width: '100%', marginVertical: 10 },
-  linkBtn: { flexDirection: 'row', backgroundColor: '#8b5cf6', padding: 12, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, padding: 25, backgroundColor: '#f3f1ff' },
+  headerContainer: { marginTop: 40, marginBottom: 20, alignItems: 'center' },
+  headerText: { fontSize: 24, fontWeight: 'bold', color: '#5b21b6' },
+  profileCard: { backgroundColor: '#fff', padding: 20, borderRadius: 20, alignItems: 'center', elevation: 4 },
+  name: { fontSize: 20, fontWeight: 'bold' },
+  username: { color: '#666', marginBottom: 10 },
+  roleBox: { backgroundColor: '#f3f1ff', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 20, marginBottom: 15 },
+  roleLabel: { fontSize: 12, color: '#8b5cf6', fontWeight: 'bold' },
+  monitorCard: { backgroundColor: '#f0fdf4', padding: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
+  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#166534' },
+  actionRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center' },
+  actionText: { fontSize: 13, fontWeight: 'bold', color: '#8b5cf6' },
+  linkBtn: { backgroundColor: '#8b5cf6', padding: 15, borderRadius: 12, alignItems: 'center' },
   linkBtnText: { color: '#fff', fontWeight: 'bold' },
-  monitoringBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0fdf4', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#bbf7d0' },
-  monitoringText: { color: '#166534', fontWeight: '600' },
-
-  editButton: { flexDirection: 'row', backgroundColor: '#ede9fe', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 30, alignItems: 'center', marginTop: 15 },
-  editButtonText: { color: '#8b5cf6', fontWeight: '600' },
-  button: { flexDirection: 'row', width: '80%', padding: 15, backgroundColor: '#6d28d9', borderRadius: 12, marginVertical: 8, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  logout: { backgroundColor: '#e74c3c' },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
-
-  // Modal Styles
+  idBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
+  idLabel: { fontSize: 10, color: '#666', fontWeight: 'bold' },
+  idValue: { fontSize: 11, fontWeight: 'bold', color: '#333' },
+  btnHome: { backgroundColor: '#6d28d9', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' },
+  btnLogout: { backgroundColor: '#e74c3c', padding: 16, borderRadius: 12, marginTop: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: 'bold' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: '#fff', padding: 25, borderRadius: 20 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 10 },
-  modalSub: { fontSize: 14, color: '#666', marginBottom: 20 },
-  input: { backgroundColor: '#f3f4f6', padding: 15, borderRadius: 10, marginBottom: 20, fontSize: 13 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 15 },
-  cancelBtn: { padding: 10 },
-  cancelBtnText: { color: '#666', fontWeight: '600' },
-  confirmBtn: { backgroundColor: '#8b5cf6', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 },
-  confirmBtnText: { color: '#fff', fontWeight: 'bold' }
+  modalContent: { backgroundColor: '#fff', width: '80%', padding: 25, borderRadius: 20 },
+  modalTitle: { fontWeight: 'bold', marginBottom: 15 },
+  input: { backgroundColor: '#f1f5f9', padding: 12, borderRadius: 10, marginBottom: 20 },
+  modalBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, alignItems: 'center' },
+  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }
 });
