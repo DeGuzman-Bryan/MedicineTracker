@@ -1,78 +1,126 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
+import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Modal,
+  Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Image,
+  View
 } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
-import { useState, useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function Profile() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [patientCode, setPatientCode] = useState('');
+  const [linking, setLinking] = useState(false);
 
-  // ✅ Re-fetch user info every time the screen gains focus
   useFocusEffect(
     useCallback(() => {
-      const fetchUserData = async () => {
-        try {
-          const user = auth.currentUser;
-          if (!user) return;
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            setUserData(userSnap.data());
-          }
-        } catch (err) {
-          console.error('Error fetching user data:', err);
-        } finally {
-          setLoading(false);
-        }
-      };
-
       fetchUserData();
     }, [])
   );
 
-  // ✅ Logout handler
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+  const fetchUserData = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        setUserData(userSnap.data());
+      }
+    } catch (err) {
+      console.error('Error fetching:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Link or CHANGE a Patient
+  const handleLinkPatient = async () => {
+    if (!patientCode.trim()) {
+      Alert.alert("Error", "Please enter a code.");
+      return;
+    }
+    setLinking(true);
+    try {
+      const patientRef = doc(db, 'users', patientCode.trim());
+      const patientSnap = await getDoc(patientRef);
+
+      if (!patientSnap.exists()) {
+        Alert.alert("Error", "Invalid Patient Code.");
+        return;
+      }
+
+      const patientData = patientSnap.data();
+      const caregiverRef = doc(db, 'users', auth.currentUser.uid);
+      
+      const updateData = {
+        linkedPatientId: patientCode.trim(),
+        linkedPatientEmail: patientData.email, 
+        linkedPatientName: patientData.fullName || patientData.userName
+      };
+
+      await updateDoc(caregiverRef, updateData);
+      Alert.alert("Success", `Now monitoring ${updateData.linkedPatientName}`);
+      setModalVisible(false);
+      setPatientCode('');
+      fetchUserData(); 
+    } catch (err) {
+      Alert.alert("Error", "Failed to link.");
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  // ✅ NEW: Disconnect current patient
+  const handleDisconnect = async () => {
+    Alert.alert('Disconnect', 'Stop monitoring this patient?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
+      { 
+        text: 'Stop', 
+        style: 'destructive', 
         onPress: async () => {
-          try {
-            await signOut(auth);
-            await AsyncStorage.clear();
-            router.replace('/login/signIn');
-          } catch (error) {
-            console.error('Logout error:', error);
-            Alert.alert('Error', 'Failed to logout. Please try again.');
-          }
-        },
-      },
+          const userRef = doc(db, 'users', auth.currentUser.uid);
+          await updateDoc(userRef, {
+            linkedPatientId: deleteField(),
+            linkedPatientEmail: deleteField(),
+            linkedPatientName: deleteField()
+          });
+          fetchUserData();
+        } 
+      }
     ]);
   };
 
-  // ✅ Show loading spinner while fetching data
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-      </View>
-    );
-  }
+  const onShareID = async () => {
+    await Share.share({ message: `My Patient Code: ${auth.currentUser.uid}` });
+  };
+
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Are you sure?', [
+      { text: 'Cancel' },
+      { text: 'Logout', onPress: async () => {
+          await signOut(auth);
+          await AsyncStorage.removeItem('userDetails');
+          router.replace('/login/signIn');
+      }}
+    ]);
+  };
+
+  if (loading) return <ActivityIndicator size="large" style={{flex:1}} />;
 
   return (
     <View style={styles.container}>
@@ -80,129 +128,97 @@ export default function Profile() {
         <Text style={styles.headerText}>My Profile</Text>
       </View>
 
-      {/* ✅ Profile Card */}
       {userData && (
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
-          </View>
-
+          <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
           <Text style={styles.name}>{userData.fullName}</Text>
           <Text style={styles.username}>@{userData.userName}</Text>
-          <Text style={styles.email}>{userData.email}</Text>
+          
+          <View style={styles.roleBox}><Text style={styles.roleLabel}>{userData.role?.toUpperCase()}</Text></View>
 
-          <View style={styles.detailsContainer}>
-            {userData.age ? (
-              <Text style={styles.info}>
-                <Text style={styles.label}>Age: </Text>
-                {userData.age}
-              </Text>
-            ) : null}
-            {userData.gender ? (
-              <Text style={styles.info}>
-                <Text style={styles.label}>Gender: </Text>
-                {userData.gender}
-              </Text>
-            ) : null}
-            {userData.bio ? (
-              <Text style={styles.bio}>
-                “{userData.bio}”
-              </Text>
-            ) : null}
-          </View>
+          {/* CAREGIVER SECTION */}
+          {userData.role === 'caregiver' && (
+            <View style={{ width: '100%' }}>
+              {userData.linkedPatientName ? (
+                <View style={styles.monitorCard}>
+                  <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
+                      <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
+                      <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
+                  <Text style={styles.linkBtnText}>Link to Patient</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => router.push('/editProfile/edit-profile')}
-          >
-            <Ionicons name="create-outline" size={18} color="#fff" />
-            <Text style={styles.editButtonText}> Edit Profile</Text>
-          </TouchableOpacity>
+          {/* PATIENT SECTION */}
+          {userData.role === 'patient' && (
+            <View style={styles.idBox}>
+              <Text style={styles.idLabel}>YOUR PATIENT CODE:</Text>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
+                <TouchableOpacity onPress={onShareID}><Ionicons name="share-social" size={18} color="#8b5cf6" /></TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
-      {/* ✅ Navigation Buttons */}
-      <TouchableOpacity style={styles.button} onPress={() => router.push('/History')}>
-        <Ionicons name="time-outline" size={18} color="#fff" />
-        <Text style={styles.buttonText}>  History</Text>
-      </TouchableOpacity>
+      <TouchableOpacity style={styles.btnHome} onPress={() => router.push('/')}><Text style={styles.btnText}>Home</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}><Text style={styles.btnText}>Logout</Text></TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => router.push('/(tabs)')}>
-        <Ionicons name="home-outline" size={18} color="#fff" />
-        <Text style={styles.buttonText}>  Home</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.button, styles.logout]} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={18} color="#fff" />
-        <Text style={styles.buttonText}>  Logout</Text>
-      </TouchableOpacity>
+      <Modal visible={isModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter Patient Code</Text>
+            <TextInput style={styles.input} placeholder="Paste ID here" value={patientCode} onChangeText={setPatientCode} autoCapitalize="none" />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Text>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
+                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff'}}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-// ✅ Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 25, backgroundColor: '#f3f1ff' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerContainer: { marginTop: 45, marginBottom: 20, alignItems: 'center' },
-  headerText: { fontSize: 26, fontWeight: '700', color: '#5b21b6' },
-
-  profileCard: {
-    backgroundColor: '#fff',
-    padding: 25,
-    borderRadius: 20,
-    alignItems: 'center',
-    marginBottom: 25,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
-  },
-
-  avatarContainer: {
-    backgroundColor: '#ede9fe',
-    borderRadius: 100,
-    padding: 5,
-    marginBottom: 10,
-  },
-
-  name: { fontSize: 22, fontWeight: 'bold', color: '#333' },
-  username: { color: '#6b7280', marginBottom: 5 },
-  email: { color: '#888', marginBottom: 10 },
-  detailsContainer: { marginTop: 8, alignItems: 'center' },
-  info: { color: '#4b5563', fontSize: 15, marginTop: 2 },
-  label: { fontWeight: '600', color: '#5b21b6' },
-  bio: {
-    marginTop: 12,
-    fontStyle: 'italic',
-    color: '#555',
-    textAlign: 'center',
-    paddingHorizontal: 15,
-  },
-
-  editButton: {
-    flexDirection: 'row',
-    backgroundColor: '#8b5cf6',
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  editButtonText: { color: 'white', fontWeight: '600', fontSize: 16 },
-
-  button: {
-    flexDirection: 'row',
-    width: '80%',
-    padding: 15,
-    backgroundColor: '#6d28d9',
-    borderRadius: 12,
-    marginVertical: 8,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logout: { backgroundColor: '#e74c3c' },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  container: { flex: 1, padding: 25, backgroundColor: '#f3f1ff' },
+  headerContainer: { marginTop: 40, marginBottom: 20, alignItems: 'center' },
+  headerText: { fontSize: 24, fontWeight: 'bold', color: '#5b21b6' },
+  profileCard: { backgroundColor: '#fff', padding: 20, borderRadius: 20, alignItems: 'center', elevation: 4 },
+  name: { fontSize: 20, fontWeight: 'bold' },
+  username: { color: '#666', marginBottom: 10 },
+  roleBox: { backgroundColor: '#f3f1ff', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 20, marginBottom: 15 },
+  roleLabel: { fontSize: 12, color: '#8b5cf6', fontWeight: 'bold' },
+  monitorCard: { backgroundColor: '#f0fdf4', padding: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
+  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#166534' },
+  actionRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center' },
+  actionText: { fontSize: 13, fontWeight: 'bold', color: '#8b5cf6' },
+  linkBtn: { backgroundColor: '#8b5cf6', padding: 15, borderRadius: 12, alignItems: 'center' },
+  linkBtnText: { color: '#fff', fontWeight: 'bold' },
+  idBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
+  idLabel: { fontSize: 10, color: '#666', fontWeight: 'bold' },
+  idValue: { fontSize: 11, fontWeight: 'bold', color: '#333' },
+  btnHome: { backgroundColor: '#6d28d9', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' },
+  btnLogout: { backgroundColor: '#e74c3c', padding: 16, borderRadius: 12, marginTop: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', width: '80%', padding: 25, borderRadius: 20 },
+  modalTitle: { fontWeight: 'bold', marginBottom: 15 },
+  input: { backgroundColor: '#f1f5f9', padding: 12, borderRadius: 10, marginBottom: 20 },
+  modalBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, alignItems: 'center' },
+  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }
 });
