@@ -4,7 +4,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import Toast from 'react-native-toast-message'; // <-- import toast
+import Toast from 'react-native-toast-message';
 import { auth } from '../../config/FirebaseConfig';
 
 export default function TabLayout() {
@@ -18,8 +18,6 @@ export default function TabLayout() {
         setUserLoggedIn(true);
       } else {
         setUserLoggedIn(false);
-
-        // Show session expired toast then navigate
         Toast.show({
           type: 'error',
           text1: 'Session Expired',
@@ -31,7 +29,7 @@ export default function TabLayout() {
 
         setTimeout(() => {
           router.replace('/login/signIn');
-        }, 3500); // wait for toast to disappear
+        }, 3500); 
       }
       setLoading(false);
     });
@@ -68,7 +66,6 @@ export default function TabLayout() {
             ),
           }}
         />
-
         <Tabs.Screen
           name="History"
           options={{
@@ -79,7 +76,6 @@ export default function TabLayout() {
             ),
           }}
         />
-
         <Tabs.Screen
           name="Profile"
           options={{
@@ -91,8 +87,6 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-
-      {/* Toast container for global notifications */}
       <Toast />
     </View>
   );

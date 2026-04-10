@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { db } from '../config/FirebaseConfig';
-import Colors from '../Constant/Colors';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
 import MedicationCardItem from './MedicationCardItem';
@@ -40,39 +39,31 @@ export default function MedicationList() {
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
-    // Check for medicine reminders every 15 seconds
     intervalRef.current = setInterval(() => {
       checkMedicineTimes();
     }, 15000);
 
     return () => clearInterval(intervalRef.current);
-  }, []);
-
-  const getLocalStorage = async (key) => {
-    try {
-      const value = await AsyncStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
-    } catch (e) {
-      console.log('Error reading local storage:', e);
-      return null;
-    }
-  };
+  }, [selectedDate]); // Added selectedDate to trigger reload
 
   const loadMedications = async (dateToFetch) => {
     try {
       setLoading(true);
-      const user = await getLocalStorage('userDetails');
-      if (!user?.email) {
-        setMedList([]);
-        return;
-      }
+      const userStr = await AsyncStorage.getItem('userDetails');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      if (!user) return;
+
+      // Major Task: If Caregiver has a linked patient, use patient email. Else use own email.
+      const targetEmail = user.role === 'caregiver' && user.linkedPatientEmail 
+        ? user.linkedPatientEmail 
+        : user.email;
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
       
-      // Fetching meds specifically for the selected date
       const q = query(
         collection(db, 'medication'),
-        where('userEmail', '==', user.email),
+        where('userEmail', '==', targetEmail),
         where('dates', 'array-contains', formattedDate)
       );
 
@@ -81,7 +72,6 @@ export default function MedicationList() {
       querySnapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
       
       setMedList(meds);
-      alertedMedsRef.current.clear(); // Reset alerts when switching dates
     } catch (e) {
       console.log('Firestore Error:', e);
     } finally {
@@ -96,20 +86,16 @@ export default function MedicationList() {
   };
 
   const checkMedicineTimes = () => {
-    const now = moment();
-    const currentFormattedTime = now.format('hh:mm A'); 
-
+    const currentFormattedTime = moment().format('hh:mm A'); 
     medList.forEach((med) => {
-      // Use 'reminder' as primary, fallback to 'time' for older records
       const medReminder = med.reminder || med.time;
-      
       if (!medReminder || alertedMedsRef.current.has(med.id)) return;
 
       if (currentFormattedTime === medReminder) {
         Toast.show({
           type: 'success',
           text1: '💊 Time for Medication',
-          text2: `Take: ${med.name} ${med.dose ? `(${med.dose})` : ''}`,
+          text2: `Take: ${med.name}`,
           position: 'top',
           visibilityTime: 5000,
         });
@@ -119,36 +105,29 @@ export default function MedicationList() {
   };
 
   const formatDay = (day) => {
-    const days = {
-      'Mon': 'Mon', 'Tue': 'Tues', 'Wed': 'Wed', 
-      'Thu': 'Thurs', 'Fri': 'Fri', 'Sat': 'Sat', 'Sun': 'Sun'
-    };
+    const days = { 'Mon': 'Mon', 'Tue': 'Tues', 'Wed': 'Wed', 'Thu': 'Thurs', 'Fri': 'Fri', 'Sat': 'Sat', 'Sun': 'Sun' };
     return days[day] || day;
   };
 
   return (
     <View style={styles.container}>
-      {/* --- Hero Banner --- */}
       <ImageBackground
         source={require('./../assets/images/med1.jpg')}
         style={styles.banner}
         imageStyle={{ borderRadius: 20 }}
         resizeMode="cover"
       >
-        <View style={styles.bannerOverlay} />
         <View style={styles.bannerTextContainer}>
           <Text style={styles.bannerTitle}>Stay Healthy, Stay Happy</Text>
           <Text style={styles.bannerSubtitle}>Consistency is the best medicine.</Text>
         </View>
       </ImageBackground>
 
-      {/* --- Date Selector --- */}
       <FlatList
         data={dateRange}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.dateList}
-        contentContainerStyle={{ paddingHorizontal: 15 }}
         renderItem={({ item }) => {
           const isSelected = item.formattedDate === selectedDate;
           const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
@@ -156,36 +135,18 @@ export default function MedicationList() {
 
           return (
             <TouchableOpacity
-              style={[
-                styles.dateButton,
-                {
-                  backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9',
-                  borderColor: isSelected ? '#8b5cf6' : '#E0E0E0',
-                },
-              ]}
+              style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
               onPress={() => handleDatePress(item)}
-              activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.dateLabel,
-                  { color: isSelected ? '#fff' : '#333' },
-                ]}
-              >
-                {day}, {dateNum}
-              </Text>
+              <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
             </TouchableOpacity>
           );
         }}
         keyExtractor={(_, index) => index.toString()}
       />
 
-      {/* --- Medication List --- */}
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.PRIMARY} />
-          <Text style={styles.loadingText}>Loading medications...</Text>
-        </View>
+        <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
       ) : medList.length === 0 ? (
         <EmptyState />
       ) : (
@@ -193,19 +154,10 @@ export default function MedicationList() {
           data={medList}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() =>
-                router.push({
-                  pathname: '/action-modal',
-                  params: { ...item, selectedDate },
-                })
-              }
-            >
+            <TouchableOpacity onPress={() => router.push({ pathname: '/action-modal', params: { ...item, selectedDate } })}>
               <MedicationCardItem medicine={item} selectedDate={selectedDate} />
             </TouchableOpacity>
           )}
-          contentContainerStyle={{ paddingBottom: 80, paddingTop: 5 }}
         />
       )}
     </View>
@@ -214,14 +166,10 @@ export default function MedicationList() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-  banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 20, marginBottom: 10, justifyContent: 'flex-start' },
-  bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0)' },
-  bannerTextContainer: { position: 'absolute', top: 25, left: 20 },
-  bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
-  bannerSubtitle: { fontSize: 12, color: '#fff', marginTop: 5, fontStyle: 'italic' },
-  dateList: { marginVertical: 1 },
-  dateButton: { height: 50, paddingHorizontal: 16, borderRadius: 25, marginRight: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center', minWidth: 90 },
-  dateLabel: { fontSize: 15, fontWeight: '600' },
-  loadingContainer: { flex: 1, alignItems: 'center', marginTop: 50 },
-  loadingText: { fontSize: 16, color: '#555', marginTop: 10 },
+  banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 10, marginBottom: 10 },
+  bannerTextContainer: { padding: 20 },
+  bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  bannerSubtitle: { fontSize: 12, color: '#fff' },
+  dateList: { marginVertical: 5 },
+  dateButton: { height: 50, paddingHorizontal: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
 });
