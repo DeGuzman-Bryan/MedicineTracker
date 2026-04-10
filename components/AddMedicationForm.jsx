@@ -12,6 +12,7 @@ import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpac
 import { db } from '../config/FirebaseConfig';
 import { TypeList, WhenToTake } from '../Constant/Options';
 import { FormatDate, getDatesRange } from '../service/ConvertDateTime';
+import { scheduleMedicationNotification, requestPermissions } from '../service/notifications';
 
 export default function AddMedicationForm() {
   const params = useLocalSearchParams();
@@ -96,6 +97,16 @@ export default function AddMedicationForm() {
       } else {
         await setDoc(docRef, dataToSave);
       }
+
+      const hasPermission = await requestPermissions();
+        if (hasPermission) {
+            // formData.reminder is expected to be a Date object or valid ISO string
+            await scheduleMedicationNotification(
+                formData.name,
+                `Dose: ${formData.dose || 'Not specified'}`,
+                formData.reminder 
+            );
+        }
 
       Alert.alert('Success', isEditing ? 'Updated!' : 'Saved!', [
         { text: 'OK', onPress: () => router.replace('(tabs)') }

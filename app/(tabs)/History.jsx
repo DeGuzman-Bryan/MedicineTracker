@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3f1ff',
-    paddingHorizontal: 25, // ✅ Apply 25 padding globally
+    paddingHorizontal: 25, 
   },
   headerContainer: {
     marginTop: 45,

@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 
+
 export default function HomeScreen() {
   return (
     <View style={{

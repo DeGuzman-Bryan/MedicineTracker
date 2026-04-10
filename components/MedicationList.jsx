@@ -213,7 +213,7 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: '#f3f1ff' },
   banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 20, marginBottom: 10, justifyContent: 'flex-start' },
   bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0)' },
   bannerTextContainer: { position: 'absolute', top: 25, left: 20 },
