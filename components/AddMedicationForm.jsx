@@ -56,22 +56,22 @@ export default function AddMedicationForm() {
     return m.isValid() ? m.toDate() : new Date();
   };
 
-  const SaveMedication = async () => {
+const SaveMedication = async () => {
     const isEditing = !!params?.docId;
     const docId = isEditing ? params.docId : Date.now().toString();
+    
+    // 1. Get user details from storage
     const userString = await AsyncStorage.getItem('userDetails');
     const user = JSON.parse(userString);
 
-    // Only Name and Reminder are strictly required
+    // 2. Validation
     if (!formData?.name || !formData?.reminder) {
       Alert.alert('Missing Info', 'Medicine Name and Reminder Time are required.');
       return;
     }
 
-    // Logic for Dates array: Fallback to today ONLY for the database record if no start date is picked
     const effectiveStart = formData.startDate || FormatDate(new Date());
     let datesArray = [];
-
     if (effectiveStart && formData.endDate) {
         datesArray = getDatesRange(effectiveStart, formData.endDate);
     } else {
@@ -79,6 +79,7 @@ export default function AddMedicationForm() {
     }
 
     try {
+      // 3. Save to Firestore
       const docRef = doc(db, 'medication', docId);
       const dataToSave = {
         ...formData,
@@ -86,7 +87,6 @@ export default function AddMedicationForm() {
         docId,
         startDate: effectiveStart,
         dates: datesArray,
-        // Ensure optional fields are at least empty strings/nulls if not touched
         type: formData.type || null,
         dose: formData.dose || '',
         when: formData.when || '',
@@ -98,21 +98,36 @@ export default function AddMedicationForm() {
         await setDoc(docRef, dataToSave);
       }
 
-      const hasPermission = await requestPermissions();
-        if (hasPermission) {
-            // formData.reminder is expected to be a Date object or valid ISO string
-            await scheduleMedicationNotification(
-                formData.name,
-                `Dose: ${formData.dose || 'Not specified'}`,
-                formData.reminder 
-            );
-        }
+      // 4. Handle Notifications (FIXED LOGIC)
+      const permissionGranted = await requestPermissions(); // Use a clear variable name
+      
+      if (permissionGranted) {
+          // Convert string "10:30 AM" to a Date object the scheduler can read
+          const [time, modifier] = formData.reminder.split(' ');
+          let [hours, minutes] = time.split(':');
+          hours = parseInt(hours, 10);
+          minutes = parseInt(minutes, 10);
+
+          if (modifier === 'PM' && hours < 12) hours += 12;
+          if (modifier === 'AM' && hours === 12) hours = 0;
+
+          const triggerDate = new Date();
+          triggerDate.setHours(hours);
+          triggerDate.setMinutes(minutes);
+          triggerDate.setSeconds(0);
+
+          await scheduleMedicationNotification(
+              formData.name,
+              `Dose: ${formData.dose || 'Take your medicine'}`,
+              triggerDate 
+          );
+      }
 
       Alert.alert('Success', isEditing ? 'Updated!' : 'Saved!', [
         { text: 'OK', onPress: () => router.replace('(tabs)') }
       ]);
     } catch (e) { 
-      console.error(e);
+      console.error("Save Error:", e);
       Alert.alert('Error', 'Failed to save medication.'); 
     }
   };

@@ -1,6 +1,5 @@
 // service/notifications.jsx
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import * as Notifications from "expo-notifications";
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -14,11 +13,11 @@ Notifications.setNotificationHandler({
 export const requestPermissions = async () => {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
+  if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-  return finalStatus === 'granted';
+  return finalStatus === "granted";
 };
 
 /**
@@ -32,15 +31,14 @@ export const scheduleMedicationNotification = async (title, body, date) => {
 
   const identifier = await Notifications.scheduleNotificationAsync({
     content: {
-      title: `Time for your ${title}! 💊`,
-      body: body || "Don't forget to take your medication.",
-      data: { screen: 'action-modal' }, // Deep link data if needed
-      sound: 'default',
+      title: `💊 Time for ${title}`,
+      body: `${body}. Stay healthy!`, // Use 'body' here, not 'dose'
+      sound: "default",
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: triggerTime.getHours(),
       minute: triggerTime.getMinutes(),
-      repeats: true, // This makes it daily
     },
   });
 
