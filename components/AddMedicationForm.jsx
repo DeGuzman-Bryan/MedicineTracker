@@ -103,8 +103,10 @@ const SaveMedication = async () => {
       
       if (permissionGranted) {
           // Convert string "10:30 AM" to a Date object the scheduler can read
-          const [time, modifier] = formData.reminder.split(' ');
+          // Add this inside your SaveMedication function
+          const [time, modifier] = formData.reminder.split(' '); // "08:00", "PM"
           let [hours, minutes] = time.split(':');
+
           hours = parseInt(hours, 10);
           minutes = parseInt(minutes, 10);
 
@@ -112,9 +114,12 @@ const SaveMedication = async () => {
           if (modifier === 'AM' && hours === 12) hours = 0;
 
           const triggerDate = new Date();
-          triggerDate.setHours(hours);
-          triggerDate.setMinutes(minutes);
-          triggerDate.setSeconds(0);
+          triggerDate.setHours(hours, minutes, 0, 0);
+
+          // If the time is already in the past today, add +1 day
+          if (triggerDate <= new Date()) {
+              triggerDate.setDate(triggerDate.getDate() + 1);
+          }
 
           await scheduleMedicationNotification(
               formData.name,
