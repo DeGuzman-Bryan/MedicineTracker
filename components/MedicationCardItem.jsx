@@ -12,8 +12,12 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
   }, [medicine, selectedDate]);
 
   const CheckStatus = () => {
-    const data = medicine?.action?.find((item) => item.date === selectedDate);
-    setStatus(data);
+  // Array.isArray ensures we only call .find if it's safe to do so
+  const data = Array.isArray(medicine?.action) 
+    ? medicine.action.find((item) => item.date === selectedDate) 
+    : null;
+    
+  setStatus(data);
   };
 
   let reminderTime = '';

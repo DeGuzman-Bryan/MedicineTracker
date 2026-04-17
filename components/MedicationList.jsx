@@ -165,11 +165,11 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1},
   banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 10, marginBottom: 10 },
   bannerTextContainer: { padding: 20 },
   bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   bannerSubtitle: { fontSize: 12, color: '#fff' },
-  dateList: { marginVertical: 5 },
-  dateButton: { height: 50, paddingHorizontal: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
+  dateList: { marginBottom: 20, padding: 5 },
+  dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
 });
