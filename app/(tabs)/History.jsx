@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router'; // Added useFocusEffect
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { Text, FlatList, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useCallback, useState } from 'react'; // Removed useEffect, Added useCallback
+import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import EmptyState from '../../components/EmptyState';
 import MedicationCardItem from '../../components/MedicationCardItem';
@@ -10,11 +11,19 @@ import { db } from '../../config/FirebaseConfig';
 
 export default function MedicationHistory() {
   const [medList, setMedList] = useState([]);
+  
+  // Modal states
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedMed, setSelectedMed] = useState(null);
+  
   const router = useRouter();
 
-  useEffect(() => {
-    loadAllMedications();
-  }, []);
+  // THIS IS THE MAGIC PART: It re-runs every time you click the History tab!
+  useFocusEffect(
+    useCallback(() => {
+      loadAllMedications();
+    }, [])
+  );
 
   const getLocalStorage = async (key) => {
     try {
@@ -50,12 +59,6 @@ export default function MedicationHistory() {
         <Text style={styles.subText}>Track your past medication activities</Text>
       </View>
 
-      {/* Banner Image 
-      <Image
-        source={require('../../assets/images/sign.jpg')}
-        style={styles.bannerImage}
-      />*/}
-
       {/* Medication List */}
       {medList.length === 0 ? (
         <View style={styles.listContainer}>
@@ -68,14 +71,10 @@ export default function MedicationHistory() {
           renderItem={({ item }) => (
             <TouchableOpacity
               activeOpacity={0.9}
-              onPress={() =>
-                router.push({
-                  pathname: '/action-modal',
-                  params: {
-                    ...item,
-                  },
-                })
-              }
+              onPress={() => {
+                setSelectedMed(item);
+                setModalVisible(true);
+              }}
             >
               <MedicationCardItem
                 medicine={item}
@@ -89,6 +88,64 @@ export default function MedicationHistory() {
           contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
+
+      {/* --- CUSTOM DETAILS MODAL --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            
+            {/* Header (Close Button & Delete Icon) */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <View style={styles.headerIcons}>
+                <TouchableOpacity onPress={() => console.log('Delete clicked for:', selectedMed.id)}>
+                  <Ionicons name="trash-outline" size={22} color="#ff4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Medicine Details */}
+            {selectedMed && (
+              <View style={styles.detailsContainer}>
+                <Text style={styles.medName}>{selectedMed.name}</Text>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Time:</Text>
+                  <Text style={styles.detailValue}>{selectedMed.time || selectedMed.reminder}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Type:</Text>
+                  <Text style={styles.detailValue}>{selectedMed.type?.name || selectedMed.type || 'Capsule'}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Dose:</Text>
+                  <Text style={styles.detailValue}>{selectedMed.dose || 'N/A'}</Text>
+                </View>
+
+                {/* Dates Row */}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Dates:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedMed.startDate || 'N/A'} {selectedMed.endDate ? `to ${selectedMed.endDate}` : ''}
+                  </Text>
+                </View>
+
+              </View>
+            )}
+
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -116,13 +173,59 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 10, 
   },
-  bannerImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 15,
-    marginBottom: 20,
-  },
   listContainer: {
     flex: 1,
+  },
+  
+  // --- MODAL STYLES ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+  },
+  detailsContainer: {
+    marginTop: 5,
+  },
+  medName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  detailLabel: {
+    width: 60,
+    fontSize: 14,
+    color: '#888',
+  },
+  detailValue: {
+    flex: 1, 
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
   },
 });
