@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router'; // Added useFocusEffect
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { useCallback, useState } from 'react'; // Removed useEffect, Added useCallback
-import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore'; // Added doc and deleteDoc
+import { useCallback, useState } from 'react';
+import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import EmptyState from '../../components/EmptyState';
 import MedicationCardItem from '../../components/MedicationCardItem';
@@ -18,7 +18,6 @@ export default function MedicationHistory() {
   
   const router = useRouter();
 
-  // THIS IS THE MAGIC PART: It re-runs every time you click the History tab!
   useFocusEffect(
     useCallback(() => {
       loadAllMedications();
@@ -51,6 +50,32 @@ export default function MedicationHistory() {
     }
   };
 
+  // --- DELETE FUNCTION ---
+  const handleDelete = async () => {
+    if (!selectedMed) return;
+
+    Alert.alert(
+      "Delete Medication",
+      "Are you sure you want to remove this from your history?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'medication', selectedMed.id));
+              setModalVisible(false); // Close modal
+              loadAllMedications(); // Refresh list
+            } catch (e) {
+              console.log("Error deleting document: ", e);
+            }
+          } 
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header Section */}
@@ -79,7 +104,7 @@ export default function MedicationHistory() {
               <MedicationCardItem
                 medicine={item}
                 selectedDate={null}
-                status={null}
+                status={item.status}
               />
             </TouchableOpacity>
           )}
@@ -106,7 +131,7 @@ export default function MedicationHistory() {
               </TouchableOpacity>
               
               <View style={styles.headerIcons}>
-                <TouchableOpacity onPress={() => console.log('Delete clicked for:', selectedMed.id)}>
+                <TouchableOpacity onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={22} color="#ff4444" />
                 </TouchableOpacity>
               </View>
@@ -176,8 +201,6 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
   },
-  
-  // --- MODAL STYLES ---
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)', 
