@@ -1,6 +1,5 @@
 {
   "expo": {
-    
     "name": "MedicineTracker",
     "slug": "MedicineTracker",
     "version": "1.0.0",
@@ -20,7 +19,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
+      "package": "com.medaily.medtrackr",
+      "permissions": [
+        "NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,6 +33,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#4e7aff"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -44,6 +56,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7566311b-dfd5-4046-b1f7-500b576ef0f2"
+      }
     }
   }
 }

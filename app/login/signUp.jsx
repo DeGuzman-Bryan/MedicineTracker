@@ -76,8 +76,9 @@ export default function SignUp() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.form}>
       <Text style={styles.title}>Create New Account</Text>
-
+      <Text style={styles.subText}>Join us to start tracking your medications!</Text>
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Full Name</Text>
         <TextInput
@@ -124,31 +125,51 @@ export default function SignUp() {
       <TouchableOpacity style={styles.button} onPress={OnCreateAccount}>
         <Text style={styles.buttonText}>Create Account</Text>
       </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.buttonCreate}
-        onPress={() => router.push("/login/signIn")}
-      >
-        <Text style={styles.buttonCreateText}>
-          Already have an account? Sign in
-        </Text>
-      </TouchableOpacity>
+        <View style={styles.textLinkContainer}>
+          <Text style={styles.textLink}>
+            Already have an account?{' '}
+            <Text
+              style={styles.textLinkHighlight}
+                onPress={() => router.push('/login/signIn')}
+            >
+              Sign In
+            </Text>
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    padding: 20,
-    paddingTop: 40,
+      flex: 1,
+      backgroundColor: Colors.BACKGROUND || '#F8FAFC',
+      paddingHorizontal: 25,
+      justifyContent: 'center',
+  },  
+  form: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginTop: 20,
-    marginBottom: 10,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#8b5cf6',
+    textAlign: 'center',
+  },
+  subText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: 'gray',
+    textAlign: 'center',
   },
   inputContainer: {
     marginTop: 25,
@@ -162,14 +183,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: Colors.GRAY,
-    borderRadius: 10,
+    borderRadius: 50,
     fontSize: 16,
     backgroundColor: "white",
   },
   button: {
     padding: 15,
-    backgroundColor: Colors.PRIMARY,
-    borderRadius: 10,
+    backgroundColor: '#8b5cf6',
+    borderRadius: 50,
     marginTop: 35,
   },
   buttonText: {
@@ -177,17 +198,16 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
   },
-  buttonCreate: {
-    padding: 15,
-    backgroundColor: "white",
-    borderRadius: 10,
+  textLinkContainer: {
     marginTop: 20,
-    borderWidth: 1,
-    borderColor: Colors.PRIMARY,
+    alignItems: 'center',
   },
-  buttonCreateText: {
-    fontSize: 17,
-    color: Colors.PRIMARY,
-    textAlign: "center",
+  textLink: {
+    fontSize: 15,
+    color: 'gray',
+  },
+  textLinkHighlight: {
+    color: '#8b5cf6',
+    fontWeight: '600',
   },
 });

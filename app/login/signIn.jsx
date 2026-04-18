@@ -1,3 +1,4 @@
+
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect, useState } from 'react';
@@ -33,10 +34,7 @@ export default function SignIn() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       console.log('✅ Logged in user:', user.email);
-
-      // Save user data to AsyncStorage (make sure the key matches MedicationList)
       await setLocalStorage('userDetails', user);
-
       Alert.alert('Success', 'Logged in successfully!');
       router.replace('(tabs)');
     } catch (error) {
@@ -55,43 +53,53 @@ export default function SignIn() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Let's Sign You In</Text>
-      <Text style={styles.subText}>Welcome Back</Text>
-      <Text style={styles.subText}>You've been missed!</Text>
+      <View style={styles.form}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Welcome back!</Text>
+          <Text style={styles.subText}>Let's Sign You in.</Text>
+          <Text style={styles.subText2}>We missed you!</Text>
+        </View>
 
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          placeholder="Email"
-          style={styles.textInput}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-        />
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            placeholder="Enter your email"
+            style={styles.textInput}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            placeholder="Enter your password"
+            style={styles.textInput}
+            secureTextEntry
+            onChangeText={setPassword}
+            value={password}
+          />
+        </View>
+
+        <TouchableOpacity style={styles.button} onPress={onSignInClick}>
+          <Text style={styles.buttonText}>Login</Text>
+        </TouchableOpacity>
+
+        {/* Updated bottom text link */}
+        <View style={styles.textLinkContainer}>
+          <Text style={styles.textLink}>
+            Don’t have an account?{' '}
+            <Text
+              style={styles.textLinkHighlight}
+              onPress={() => router.push('/login/signUp')}
+            >
+              Sign up
+            </Text>
+          </Text>
+        </View>
       </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          placeholder="Password"
-          style={styles.textInput}
-          secureTextEntry
-          onChangeText={setPassword}
-          value={password}
-        />
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={onSignInClick}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.buttonCreate}
-        onPress={() => router.push('/login/signUp')}
-      >
-        <Text style={styles.buttonCreateText}>Create Account</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -99,62 +107,80 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'flex-start',
-    paddingTop: 40,
-    paddingLeft: 20,
-    paddingRight: 20,
+    backgroundColor: Colors.BACKGROUND || '#F8FAFC',
+    paddingHorizontal: 25,
+    justifyContent: 'center',
+  },
+  header: {
+    marginBottom: 20,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 10,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#8b5cf6',
   },
   subText: {
-    fontSize: 20,
-    marginTop: 5,
-    color: Colors.GRAY,
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'black',
+    marginTop: 4,
+  },
+  subText2: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: 'gray',
+  },
+  form: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
   },
   inputContainer: {
-    marginTop: 25,
+    marginBottom: 20,
   },
   label: {
-    fontSize: 16,
-    marginBottom: 6,
-    color: '#333',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
   },
   textInput: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Colors.GRAY,
-    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1.3,
+    borderColor: '#D1D5DB',
+    borderRadius: 50,
     fontSize: 16,
-    marginTop: 5,
-    backgroundColor: 'white',
+    backgroundColor: '#F9FAFB',
   },
   button: {
-    padding: 15,
-    backgroundColor: Colors.PRIMARY,
-    borderRadius: 10,
-    marginTop: 35,
+    backgroundColor: '#8b5cf6',
+    paddingVertical: 15,
+    borderRadius: 50,
+    marginTop: 15,
   },
   buttonText: {
     fontSize: 17,
-    color: 'white',
+    fontWeight: '600',
+    color: '#fff',
     textAlign: 'center',
   },
-  buttonCreate: {
-    padding: 15,
-    backgroundColor: 'white',
-    borderRadius: 10,
+  textLinkContainer: {
     marginTop: 20,
-    borderWidth: 1,
-    borderColor: Colors.PRIMARY,
+    alignItems: 'center',
   },
-  buttonCreateText: {
-    fontSize: 17,
-    color: Colors.PRIMARY,
-    textAlign: 'center',
+  textLink: {
+    fontSize: 15,
+    color: 'gray',
+  },
+  textLinkHighlight: {
+    color: '#8b5cf6',
+    fontWeight: '600',
   },
 });

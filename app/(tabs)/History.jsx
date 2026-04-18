@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { FlatList, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text, FlatList, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import EmptyState from '../../components/EmptyState';
 import MedicationCardItem from '../../components/MedicationCardItem';
@@ -43,15 +43,24 @@ export default function MedicationHistory() {
   };
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: 15 }}>
+    <View style={styles.container}>
+      {/* Header Section */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerText}>History</Text>
+        <Text style={styles.subText}>Track your past medication activities</Text>
+      </View>
+
+      {/* Banner Image 
       <Image
         source={require('../../assets/images/sign.jpg')}
-        style={{ width: '100%', height: 200, borderRadius: 15, marginTop: 20 }}
-      />
+        style={styles.bannerImage}
+      />*/}
 
       {/* Medication List */}
       {medList.length === 0 ? (
-        <EmptyState />
+        <View style={styles.listContainer}>
+          <EmptyState />
+        </View>
       ) : (
         <FlatList
           data={medList}
@@ -70,12 +79,14 @@ export default function MedicationHistory() {
             >
               <MedicationCardItem
                 medicine={item}
-                selectedDate={null} // no date filtering
-                status={null}       // no date-specific status
+                selectedDate={null}
+                status={null}
               />
             </TouchableOpacity>
           )}
-          style={{ marginTop: 10 }}
+          style={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
     </View>
@@ -83,5 +94,35 @@ export default function MedicationHistory() {
 }
 
 const styles = StyleSheet.create({
-  // No date selector styles needed
+  container: {
+    flex: 1,
+    backgroundColor: '#f3f1ff',
+    paddingHorizontal: 25, 
+  },
+  headerContainer: {
+    marginTop: 45,
+    marginBottom: 20,
+  },
+  headerText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#8b5cf6',
+    paddingHorizontal: 10, 
+  },
+  subText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'gray',
+    marginTop: 4,
+    paddingHorizontal: 10, 
+  },
+  bannerImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 15,
+    marginBottom: 20,
+  },
+  listContainer: {
+    flex: 1,
+  },
 });

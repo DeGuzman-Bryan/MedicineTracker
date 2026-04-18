@@ -1,99 +1,104 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { arrayUnion, doc, updateDoc } from 'firebase/firestore'; // ✅ FIXED: use firestore, not firestore/lite
+import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 
 export default function Index() {
-  const { selectedDate, reminder, docId } = useLocalSearchParams(); // ✅ Get docId directly
+  const medicine = useLocalSearchParams(); 
+  const { selectedDate, reminder, docId } = medicine;
   const router = useRouter();
 
-  const UpdateActionStatus = async (status) => {
-    try {
-      if (!docId) {
-        Alert.alert('Error', 'Missing document ID. Cannot update.');
-        return;
-      }
-
-      const docRef = doc(db, 'medication', docId); // ✅ Use docId from params
-      await updateDoc(docRef, {
-        action: arrayUnion({
-          status: status,
-          time: moment().format('LT'),
-          date: selectedDate,
-        }),
-      });
-
-      // ✅ Works both iOS + Android
-      Alert.alert(
-        status,
-        'Response saved successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('(tabs)'),
-          },
-        ],
-        { cancelable: false }
-      );
-    } catch (e) {
-      console.log('Error updating status:', e);
-      Alert.alert('Error', 'Failed to update status. Please try again.');
-    }
+  const onDeletePress = () => {
+    Alert.alert('Delete Medication', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'medication', docId));
+            router.replace('(tabs)'); 
+          } catch (e) { Alert.alert('Error', 'Could not delete.'); }
+      }},
+    ]);
   };
 
-  const formatReminderTime = (reminderStr) => {
-    if (!reminderStr) return 'No reminder set';
-    const match = reminderStr.match(/seconds=(\d+)/);
-    if (!match) return 'Invalid time';
-    const seconds = parseInt(match[1]);
-    const date = new Date(seconds * 1000);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
+  const onEditPress = () => {
+    router.push({
+      pathname: '/add-new-medication',
+      params: { 
+        ...medicine,
+        type: typeof medicine.type === 'object' ? JSON.stringify(medicine.type) : medicine.type 
+      }
     });
   };
 
-  const formattedTime = formatReminderTime(reminder);
+  const UpdateActionStatus = async (status) => {
+    try {
+      await updateDoc(doc(db, 'medication', docId), {
+        action: arrayUnion({ status, time: moment().format('LT'), date: selectedDate }),
+      });
+      router.replace('(tabs)');
+    } catch (e) { Alert.alert('Error', 'Failed to update.'); }
+  };
+
+  // --- THE FIX FOR THE TIMESTAMP STRING ---
+  const formatReminderTime = (reminderStr) => {
+    if (!reminderStr) return 'No time set';
+    
+    // Check if it's the raw Firestore string: "Timestamp(seconds=1769466840, nanoseconds=0)"
+    const match = reminderStr.match(/seconds=(\d+)/);
+    if (match) {
+      const seconds = parseInt(match[1]);
+      const date = new Date(seconds * 1000);
+      return date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+    
+    // If it's already a normal string (like "10:30 AM"), return it as is
+    return reminderStr;
+  };
 
   return (
     <View style={styles.container}>
-      <Image
-        source={require('../../assets/images/notification.gif')}
-        style={styles.image}
+      <Image 
+        source={require('../../assets/images/notification.gif')} 
+        style={styles.image} 
       />
-
-      <Text style={styles.dateText}>{selectedDate || 'No date selected'}</Text>
-
-      <Text style={styles.reminderText}>{formattedTime}</Text>
-
+      
+      <Text style={styles.dateText}>{selectedDate}</Text>
+      
+      {/* USE THE NEW FORMATTING FUNCTION HERE */}
+      <Text style={styles.reminderText}>{formatReminderTime(reminder)}</Text>
+      
       <Text style={styles.subText}>It's time to take</Text>
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.missedBtn}
-          onPress={() => UpdateActionStatus('Missed')}
-        >
+        <TouchableOpacity style={styles.missedBtn} onPress={() => UpdateActionStatus('Missed')}>
           <AntDesign name="close" size={22} color="red" />
           <Text style={styles.missedText}>Missed</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.takenBtn}
-          onPress={() => UpdateActionStatus('Taken')}
-        >
+        <TouchableOpacity style={styles.takenBtn} onPress={() => UpdateActionStatus('Taken')}>
           <AntDesign name="check" size={22} color="white" />
           <Text style={styles.takenText}>Taken</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        onPress={() => router.back()}
-        style={{ position: 'absolute', bottom: 50 }}
-      >
+      <TouchableOpacity style={styles.editBtn} onPress={onEditPress}>
+        <AntDesign name="edit" size={22} color="#007AFF" />
+        <Text style={styles.editText}>Edit Medication</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.deleteBtn} onPress={onDeletePress}>
+        <MaterialIcons name="delete-forever" size={24} color="#ff4444" />
+        <Text style={styles.deleteText}>Delete Medication</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', bottom: 50 }}>
         <FontAwesome name="close" size={44} color="gray" />
       </TouchableOpacity>
     </View>
@@ -101,65 +106,18 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 25,
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  image: {
-    width: 120,
-    height: 120,
-  },
-  dateText: {
-    marginTop: 20,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#555',
-  },
-  reminderText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#222',
-    marginVertical: 10,
-  },
-  subText: {
-    fontSize: 18,
-    color: '#444',
-    marginBottom: 25,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  missedBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'red',
-    borderRadius: 10,
-    gap: 6,
-  },
-  missedText: {
-    fontSize: 18,
-    color: 'red',
-    fontWeight: '600',
-  },
-  takenBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3aff33',
-    borderRadius: 10,
-    gap: 6,
-  },
-  takenText: {
-    fontSize: 18,
-    color: 'white',
-    fontWeight: '600',
-  },
+  container: { padding: 25, flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  image: { width: 120, height: 120 },
+  dateText: { marginTop: 20, fontSize: 16, color: '#555' },
+  reminderText: { fontSize: 32, fontWeight: 'bold', color: '#222', marginVertical: 10, textAlign: 'center' },
+  subText: { fontSize: 18, color: '#444', marginBottom: 25 },
+  buttonRow: { flexDirection: 'row', gap: 15 },
+  missedBtn: { padding: 12, flexDirection: 'row', borderWidth: 2, borderColor: 'red', borderRadius: 10, gap: 6, alignItems: 'center' },
+  missedText: { color: 'red', fontWeight: 'bold', fontSize: 18 },
+  takenBtn: { padding: 12, flexDirection: 'row', backgroundColor: '#3dd474ff', borderRadius: 10, gap: 6, alignItems: 'center' },
+  takenText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  editBtn: { marginTop: 30, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  editText: { color: '#007AFF', fontSize: 17, fontWeight: 'bold' },
+  deleteBtn: { marginTop: 15, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  deleteText: { color: '#ff4444', fontSize: 17, fontWeight: 'bold' }
 });

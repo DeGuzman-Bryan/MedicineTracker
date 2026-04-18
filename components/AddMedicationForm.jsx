@@ -4,240 +4,283 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-import { doc, setDoc } from 'firebase/firestore';
-import { useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import moment from 'moment';
+import { useEffect, useState } from 'react';
+import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../config/FirebaseConfig';
-import Colors from '../Constant/Colors';
 import { TypeList, WhenToTake } from '../Constant/Options';
-import { FormatDate, FormatDateForText, getDatesRange } from '../service/ConvertDateTime';
-
-const getLocalStorage = async (key) => {
-  try {
-    const value = await AsyncStorage.getItem(key);
-    return value ? JSON.parse(value) : null;
-  } catch (e) {
-    console.log('Error reading local storage', e);
-    return null;
-  }
-};
+import { FormatDate, getDatesRange } from '../service/ConvertDateTime';
+import { scheduleMedicationNotification, requestPermissions } from '../service/notifications';
 
 export default function AddMedicationForm() {
-  const [formData, setFormData] = useState({});
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    type: null,
+    dose: '',
+    when: '',
+    startDate: null,
+    endDate: null,
+    reminder: ''
+  });
+
   const [showStartDate, setShowStartDate] = useState(false);
   const [showEndDate, setShowEndDate] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  useEffect(() => {
+    if (params?.docId) {
+      let parsedType = params.type;
+      if (typeof params.type === 'string' && params.type.startsWith('{')) {
+        try { parsedType = JSON.parse(params.type); } catch (e) { console.log(e); }
+      }
+      setFormData({
+        ...params,
+        type: parsedType,
+        reminder: params.reminder || ''
+      });
+    }
+  }, [params.docId]);
 
   const onHandleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const SaveMedication = async () => {
-    const docId = Date.now().toString();
-    const user = await getLocalStorage('userDetails');
+  const getSafeDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    const m = moment(dateStr); 
+    return m.isValid() ? m.toDate() : new Date();
+  };
 
-    if (
-      !formData?.name ||
-      !formData?.type ||
-      !formData?.dose ||
-      !formData?.startDate ||
-      !formData?.endDate ||
-      !formData?.when ||
-      !formData?.reminder
-    ) {
-      Alert.alert('Missing Fields', 'Please fill in all fields before saving.', [{ text: 'OK' }]);
+const SaveMedication = async () => {
+    const isEditing = !!params?.docId;
+    const docId = isEditing ? params.docId : Date.now().toString();
+    
+    // 1. Get user details from storage
+    const userString = await AsyncStorage.getItem('userDetails');
+    const user = JSON.parse(userString);
+
+    // 2. Validation
+    if (!formData?.name || !formData?.reminder) {
+      Alert.alert('Missing Info', 'Medicine Name and Reminder Time are required.');
       return;
     }
 
-    // ✅ Ensure all dates are formatted strings
-    const dates = getDatesRange(formData?.startDate, formData.endDate).map((d) =>
-      typeof d === 'string' ? d : FormatDate(d)
-    );
+    const effectiveStart = formData.startDate || FormatDate(new Date());
+    let datesArray = [];
+    if (effectiveStart && formData.endDate) {
+        datesArray = getDatesRange(effectiveStart, formData.endDate);
+    } else {
+        datesArray = [effectiveStart];
+    }
 
     try {
-      await setDoc(doc(db, 'medication', docId), {
+      // 3. Save to Firestore
+      const docRef = doc(db, 'medication', docId);
+      const dataToSave = {
         ...formData,
         userEmail: user?.email || 'guest',
         docId,
-        startDate: FormatDate(formData.startDate),
-        endDate: FormatDate(formData.endDate),
-        dates: dates, // ✅ formatted date strings for easy querying
-      });
+        startDate: effectiveStart,
+        dates: datesArray,
+        type: formData.type || null,
+        dose: formData.dose || '',
+        when: formData.when || '',
+      };
 
-      Alert.alert('Success', 'Medication added successfully!', [{ text: 'OK' }]);
-      setFormData({});
-    } catch (e) {
-      console.log('Firestore error:', e);
-      Alert.alert('Error', 'Something went wrong. Please try again.', [{ text: 'OK' }]);
+      if (isEditing) {
+        await updateDoc(docRef, dataToSave);
+      } else {
+        await setDoc(docRef, dataToSave);
+      }
+
+      // 4. Handle Notifications (FIXED LOGIC)
+      const permissionGranted = await requestPermissions(); // Use a clear variable name
+      
+      if (permissionGranted) {
+          // Convert string "10:30 AM" to a Date object the scheduler can read
+          // Add this inside your SaveMedication function
+          const [time, modifier] = formData.reminder.split(' '); // "08:00", "PM"
+          let [hours, minutes] = time.split(':');
+
+          hours = parseInt(hours, 10);
+          minutes = parseInt(minutes, 10);
+
+          if (modifier === 'PM' && hours < 12) hours += 12;
+          if (modifier === 'AM' && hours === 12) hours = 0;
+
+          const triggerDate = new Date();
+          triggerDate.setHours(hours, minutes, 0, 0);
+
+          // If the time is already in the past today, add +1 day
+          if (triggerDate <= new Date()) {
+              triggerDate.setDate(triggerDate.getDate() + 1);
+          }
+
+          await scheduleMedicationNotification(
+              formData.name,
+              `Dose: ${formData.dose || 'Take your medicine'}`,
+              triggerDate 
+          );
+      }
+
+      Alert.alert('Success', isEditing ? 'Updated!' : 'Saved!', [
+        { text: 'OK', onPress: () => router.replace('(tabs)') }
+      ]);
+    } catch (e) { 
+      console.error("Save Error:", e);
+      Alert.alert('Error', 'Failed to save medication.'); 
     }
   };
 
   return (
-    <ScrollView style={{ padding: 25 }} keyboardShouldPersistTaps="handled">
-      <Text style={styles.header}>Add New Medication</Text>
-
-      {/* Medicine Name */}
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 50 }}>
+      {/* Medicine Name (REQUIRED) */}
       <View style={styles.inputGroup}>
-        <Ionicons style={styles.icon} name="medkit-outline" size={24} color="black" />
+        <Ionicons name="medkit-outline" size={22} color="#8b5cf6" />
         <TextInput
           style={styles.textInput}
-          placeholder=" Medicine Name"
+          placeholder="Medicine Name (Required)"
           value={formData.name || ''}
-          onChangeText={(value) => onHandleInputChange('name', value)}
+          onChangeText={(v) => onHandleInputChange('name', v)}
         />
       </View>
 
-      {/* Medicine Type */}
+      {/* Type Selection (OPTIONAL) */}
+      <Text style={styles.label}>Type (Optional)</Text>
       <FlatList
         data={TypeList}
         horizontal
-        style={{ marginTop: 5 }}
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[
-              styles.inputGroup,
-              { marginRight: 10 },
-              { backgroundColor: item.name === formData?.type?.name ? Colors.PRIMARY : 'white' },
+              styles.typeChip, 
+              item.name === (formData?.type?.name || formData?.type) && styles.typeChipActive
             ]}
             onPress={() => onHandleInputChange('type', item)}
           >
-            <Text
-              style={[
-                styles.typeText,
-                { color: item.name === formData?.type?.name ? 'white' : 'black' },
-              ]}
-            >
-              {item?.name}
+            <Text style={[
+              styles.typeText, 
+              item.name === (formData?.type?.name || formData?.type) && styles.typeTextActive
+            ]}>
+              {item.name}
             </Text>
           </TouchableOpacity>
         )}
-        keyExtractor={(item, index) => index.toString()}
       />
 
-      {/* Dose */}
-      <View style={styles.inputGroup}>
-        <Ionicons style={styles.icon} name="eyedrop-outline" size={24} color="black" />
+      {/* Dose Input (OPTIONAL) */}
+      <View style={[styles.inputGroup, { marginTop: 15 }]}>
+        <Ionicons name="eyedrop-outline" size={22} color="#8b5cf6" />
         <TextInput
           style={styles.textInput}
-          placeholder=" Dose Ex. 2, 5ml"
+          placeholder="Dose (Optional, e.g. 2 tablets)"
           value={formData.dose || ''}
-          onChangeText={(value) => onHandleInputChange('dose', value)}
+          onChangeText={(v) => onHandleInputChange('dose', v)}
         />
       </View>
 
-      {/* When to Take */}
+      {/* When to Take (OPTIONAL) */}
+      <Text style={styles.label}>When to Take (Optional)</Text>
       <View style={styles.inputGroup}>
-        <AntDesign style={styles.icon} name="field-time" size={24} color="black" />
+        <AntDesign name="field-time" size={22} color="#8b5cf6" />
         <Picker
           selectedValue={formData?.when || ''}
-          onValueChange={(itemValue) => onHandleInputChange('when', itemValue)}
-          style={{ width: '90%' }}
+          onValueChange={(v) => onHandleInputChange('when', v)}
+          style={{ flex: 1 }}
         >
+          <Picker.Item label="Not Specified" value="" />
           {WhenToTake.map((item, index) => (
             <Picker.Item key={index} label={item} value={item} />
           ))}
         </Picker>
       </View>
 
-      {/* Start & End Dates */}
+      {/* Duration (OPTIONAL) */}
+      <Text style={styles.label}>Duration (Optional)</Text>
       <View style={styles.dateGroup}>
         <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowStartDate(true)}>
-          <AntDesign style={styles.icon} name="calendar" size={24} color="black" />
-          <Text style={styles.text}>
-            {formData?.startDate ? FormatDateForText(formData?.startDate) : 'Start Date'}
+          <AntDesign name="calendar" size={22} color="#8b5cf6" />
+          <Text style={{ marginLeft: 10, fontSize: 13 }}>
+            {formData?.startDate ? formData.startDate : 'Start Date'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowEndDate(true)}>
-          <AntDesign style={styles.icon} name="calendar" size={24} color="black" />
-          <Text style={styles.text}>
-            {formData?.endDate ? FormatDateForText(formData?.endDate) : 'End Date'}
+          <AntDesign name="calendar" size={22} color="#8b5cf6" />
+          <Text style={{ marginLeft: 10, fontSize: 13 }}>
+            {formData?.endDate ? formData.endDate : 'End Date'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Reminder Time */}
-      <View style={styles.dateGroup}>
-        <TouchableOpacity style={[styles.inputGroup, { flex: 1 }]} onPress={() => setShowTimePicker(true)}>
-          <FontAwesome6 style={styles.icon} name="user-clock" size={24} color="black" />
-          <Text style={styles.text}>
-            {formData?.reminder
-              ? new Date(formData.reminder).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Select Reminder Time'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Reminder Time (REQUIRED) */}
+      <Text style={styles.label}>Reminder Time (Required)</Text>
+      <TouchableOpacity style={styles.inputGroup} onPress={() => setShowTimePicker(true)}>
+        <FontAwesome6 name="user-clock" size={22} color="#8b5cf6" />
+        <Text style={{ marginLeft: 10 }}>{formData.reminder || 'Select Time'}</Text>
+      </TouchableOpacity>
 
-      {/* DateTime Pickers */}
+      {/* Pickers */}
       {showStartDate && (
-        <RNDateTimePicker
-          minimumDate={new Date()}
-          mode="date"
-          onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('startDate', FormatDate(selectedDate));
-            setShowStartDate(false);
-          }}
-          value={formData?.startDate ? new Date(formData.startDate) : new Date()}
+        <RNDateTimePicker 
+          value={getSafeDate(formData.startDate)} 
+          mode="date" 
+          onChange={(e, d) => { 
+            setShowStartDate(false); 
+            if (d && e.type !== 'dismissed') onHandleInputChange('startDate', FormatDate(d)); 
+          }} 
         />
       )}
 
       {showEndDate && (
-        <RNDateTimePicker
-          minimumDate={new Date()}
-          mode="date"
-          onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('endDate', FormatDate(selectedDate));
-            setShowEndDate(false);
-          }}
-          value={formData?.endDate ? new Date(formData.endDate) : new Date()}
+        <RNDateTimePicker 
+          value={getSafeDate(formData.endDate)} 
+          mode="date" 
+          onChange={(e, d) => { 
+            setShowEndDate(false); 
+            if (d && e.type !== 'dismissed') onHandleInputChange('endDate', FormatDate(d)); 
+          }} 
         />
       )}
 
       {showTimePicker && (
-        <RNDateTimePicker
-          mode="time"
-          onChange={(event, selectedDate) => {
-            if (event.type === 'set' && selectedDate) onHandleInputChange('reminder', selectedDate);
-            setShowTimePicker(false);
-          }}
-          value={formData?.reminder ? new Date(formData.reminder) : new Date()}
+        <RNDateTimePicker 
+          value={new Date()} 
+          mode="time" 
+          is24Hour={false} 
+          onChange={(e, d) => { 
+            setShowTimePicker(false); 
+            if (d) {
+                const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                onHandleInputChange('reminder', timeStr);
+            }
+          }} 
         />
       )}
 
       <TouchableOpacity style={styles.button} onPress={SaveMedication}>
-        <Text style={styles.buttonText}>Add new Medication</Text>
+        <Text style={styles.buttonText}>{params?.docId ? 'Update Medication' : 'Save Medication'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { fontSize: 25, fontWeight: 'bold' },
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginTop: 10,
-    backgroundColor: 'white',
-  },
+  container: { padding: 20, backgroundColor: '#F9FAFB' },
+  label: { fontSize: 14, fontWeight: '600', marginTop: 15, marginBottom: 5, color: '#555' },
+  inputGroup: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: 'white', marginBottom: 10 },
   textInput: { flex: 1, marginLeft: 10, fontSize: 16 },
-  icon: { color: Colors.PRIMARY, borderRightWidth: 1, paddingRight: 12, borderColor: '#E5E7EB' },
-  typeText: { fontSize: 16 },
-  text: { fontSize: 16, padding: 10, flex: 1, marginLeft: 10 },
+  typeChip: { padding: 10, paddingHorizontal: 15, borderRadius: 50, borderWidth: 1, borderColor: '#8b5cf6', marginRight: 10 },
+  typeChipActive: { backgroundColor: '#8b5cf6' },
+  typeText: { color: '#8b5cf6' },
+  typeTextActive: { color: 'white' },
   dateGroup: { flexDirection: 'row', gap: 10 },
-  button: { padding: 15, backgroundColor: Colors.PRIMARY, borderRadius: 15, width: '100%', marginTop: 25 },
-  buttonText: { fontSize: 17, color: 'white', textAlign: 'center' },
+  button: { padding: 16, backgroundColor: '#8b5cf6', borderRadius: 50, marginTop: 25 },
+  buttonText: { color: 'white', textAlign: 'center', fontWeight: 'bold', fontSize: 18 }
 });

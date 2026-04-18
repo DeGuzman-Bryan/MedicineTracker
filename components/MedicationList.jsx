@@ -4,8 +4,9 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
-  Image,
+  ImageBackground,
   LayoutAnimation,
   Platform,
   StyleSheet,
@@ -14,9 +15,8 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message'; // <-- import toast
+import Toast from 'react-native-toast-message';
 import { db } from '../config/FirebaseConfig';
-import Colors from '../Constant/Colors';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
 import MedicationCardItem from './MedicationCardItem';
@@ -39,46 +39,39 @@ export default function MedicationList() {
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
-    // Check every 15 seconds for precise timing
     intervalRef.current = setInterval(() => {
       checkMedicineTimes();
     }, 15000);
 
     return () => clearInterval(intervalRef.current);
-  }, []);
-
-  const getLocalStorage = async (key) => {
-    try {
-      const value = await AsyncStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
-    } catch (e) {
-      console.log('Error reading local storage:', e);
-      return null;
-    }
-  };
+  }, [selectedDate]); // Added selectedDate to trigger reload
 
   const loadMedications = async (dateToFetch) => {
     try {
       setLoading(true);
-      const user = await getLocalStorage('userDetails');
-      if (!user?.email) {
-        setMedList([]);
-        return;
-      }
+      const userStr = await AsyncStorage.getItem('userDetails');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      if (!user) return;
+
+      // Major Task: If Caregiver has a linked patient, use patient email. Else use own email.
+      const targetEmail = user.role === 'caregiver' && user.linkedPatientEmail 
+        ? user.linkedPatientEmail 
+        : user.email;
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
+      
       const q = query(
         collection(db, 'medication'),
-        where('userEmail', '==', user.email),
+        where('userEmail', '==', targetEmail),
         where('dates', 'array-contains', formattedDate)
       );
 
       const querySnapshot = await getDocs(q);
       const meds = [];
       querySnapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
+      
       setMedList(meds);
-
-      alertedMedsRef.current.clear(); // reset alerts for new day
     } catch (e) {
       console.log('Firestore Error:', e);
     } finally {
@@ -93,78 +86,67 @@ export default function MedicationList() {
   };
 
   const checkMedicineTimes = () => {
-    const now = moment();
+    const currentFormattedTime = moment().format('hh:mm A'); 
     medList.forEach((med) => {
-      if (!med.time || alertedMedsRef.current.has(med.id)) return;
+      const medReminder = med.reminder || med.time;
+      if (!medReminder || alertedMedsRef.current.has(med.id)) return;
 
-      const medTime = moment(`${selectedDate} ${med.time}`, 'MM/DD/YYYY HH:mm');
-
-      // Exact hour and minute match
-      if (now.hour() === medTime.hour() && now.minute() === medTime.minute()) {
+      if (currentFormattedTime === medReminder) {
         Toast.show({
           type: 'success',
-          text1: '💊 Time to take your medicine',
+          text1: '💊 Time for Medication',
           text2: `Take: ${med.name}`,
           position: 'top',
           visibilityTime: 5000,
-          autoHide: true,
         });
-
         alertedMedsRef.current.add(med.id);
       }
     });
   };
 
+  const formatDay = (day) => {
+    const days = { 'Mon': 'Mon', 'Tue': 'Tues', 'Wed': 'Wed', 'Thu': 'Thurs', 'Fri': 'Fri', 'Sat': 'Sat', 'Sun': 'Sun' };
+    return days[day] || day;
+  };
+
   return (
-    <View style={{ flex: 1, paddingHorizontal: 15 }}>
-      <Image
+    <View style={styles.container}>
+      <ImageBackground
         source={require('./../assets/images/med1.jpg')}
-        style={{ width: '100%', height: 200, borderRadius: 15, marginTop: 20 }}
-      />
+        style={styles.banner}
+        imageStyle={{ borderRadius: 20 }}
+        resizeMode="cover"
+      >
+        <View style={styles.bannerTextContainer}>
+          <Text style={styles.bannerTitle}>Stay Healthy, Stay Happy</Text>
+          <Text style={styles.bannerSubtitle}>Consistency is the best medicine.</Text>
+        </View>
+      </ImageBackground>
 
       <FlatList
         data={dateRange}
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 15 }}
-        contentContainerStyle={{ paddingHorizontal: 5 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.dateGroup,
-              {
-                backgroundColor:
-                  item.formattedDate === selectedDate ? Colors.PRIMARY : Colors.GRAY,
-                transform: [{ scale: item.formattedDate === selectedDate ? 1.08 : 1 }],
-              },
-            ]}
-            activeOpacity={0.8}
-            onPress={() => handleDatePress(item)}
-          >
-            <Text
-              style={[
-                styles.day,
-                { color: item.formattedDate === selectedDate ? 'white' : 'black' },
-              ]}
-            >
-              {item.day}
-            </Text>
+        style={styles.dateList}
+        renderItem={({ item }) => {
+          const isSelected = item.formattedDate === selectedDate;
+          const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
+          const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
 
-            <Text
-              style={[
-                styles.date,
-                { color: item.formattedDate === selectedDate ? 'white' : 'black' },
-              ]}
+          return (
+            <TouchableOpacity
+              style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
+              onPress={() => handleDatePress(item)}
             >
-              {item.date}
-            </Text>
-          </TouchableOpacity>
-        )}
+              <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
+            </TouchableOpacity>
+          );
+        }}
         keyExtractor={(_, index) => index.toString()}
       />
 
       {loading ? (
-        <Text style={{ textAlign: 'center', marginTop: 20 }}>Loading...</Text>
+        <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
       ) : medList.length === 0 ? (
         <EmptyState />
       ) : (
@@ -172,19 +154,10 @@ export default function MedicationList() {
           data={medList}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() =>
-                router.push({
-                  pathname: '/action-modal',
-                  params: { ...item, selectedDate },
-                })
-              }
-            >
+            <TouchableOpacity onPress={() => router.push({ pathname: '/action-modal', params: { ...item, selectedDate } })}>
               <MedicationCardItem medicine={item} selectedDate={selectedDate} />
             </TouchableOpacity>
           )}
-          style={{ marginTop: 10 }}
         />
       )}
     </View>
@@ -192,20 +165,11 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  dateGroup: {
-    width: 70,
-    paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'lightgray',
-    marginRight: 8,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  day: { fontSize: 16, fontWeight: '600' },
-  date: { fontSize: 20, fontWeight: 'bold' },
+  container: {flex: 1},
+  banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 10, marginBottom: 10 },
+  bannerTextContainer: { padding: 20 },
+  bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  bannerSubtitle: { fontSize: 12, color: '#fff' },
+  dateList: { marginBottom: 20, padding: 5, height: 100 },
+  dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
 });
