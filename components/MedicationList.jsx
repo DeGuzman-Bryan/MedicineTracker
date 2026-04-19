@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -44,17 +44,15 @@ export default function MedicationList() {
     }, 15000);
 
     return () => clearInterval(intervalRef.current);
-  }, [selectedDate]); // Added selectedDate to trigger reload
+  }, [selectedDate]);
 
   const loadMedications = async (dateToFetch) => {
     try {
       setLoading(true);
       const userStr = await AsyncStorage.getItem('userDetails');
       const user = userStr ? JSON.parse(userStr) : null;
-      
       if (!user) return;
 
-      // Major Task: If Caregiver has a linked patient, use patient email. Else use own email.
       const targetEmail = user.role === 'caregiver' && user.linkedPatientEmail 
         ? user.linkedPatientEmail 
         : user.email;
@@ -69,7 +67,43 @@ export default function MedicationList() {
 
       const querySnapshot = await getDocs(q);
       const meds = [];
-      querySnapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
+      const now = moment();
+
+      for (const docSnap of querySnapshot.docs) {
+        let data = docSnap.data();
+        const medId = docSnap.id;
+
+        // --- AUTOMATIC MISSED LOGIC ---
+        const existingStatus = data.action?.find(a => a.date === formattedDate);
+        
+        if (!existingStatus) {
+          const medTime = data.reminder || data.time;
+          if (medTime) {
+            // Create a moment object for the medication time on the selected date
+            const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
+            
+            // If current time is > 1 hour past scheduled time
+            if (now.diff(scheduledTime, 'minutes') >= 60) {
+              const missedAction = {
+                date: formattedDate,
+                status: 'Missed',
+                time: medTime
+              };
+
+              // Update Firestore
+              const docRef = doc(db, 'medication', medId);
+              await updateDoc(docRef, {
+                action: arrayUnion(missedAction)
+              });
+
+              // Update local data for immediate UI change
+              if (!data.action) data.action = [];
+              data.action.push(missedAction);
+            }
+          }
+        }
+        meds.push({ id: medId, ...data });
+      }
       
       setMedList(meds);
     } catch (e) {
@@ -123,27 +157,29 @@ export default function MedicationList() {
         </View>
       </ImageBackground>
 
-      <FlatList
-        data={dateRange}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.dateList}
-        renderItem={({ item }) => {
-          const isSelected = item.formattedDate === selectedDate;
-          const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
-          const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
+      <View style={{height: 80}}>
+        <FlatList
+            data={dateRange}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.dateList}
+            renderItem={({ item }) => {
+            const isSelected = item.formattedDate === selectedDate;
+            const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
+            const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
 
-          return (
-            <TouchableOpacity
-              style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
-              onPress={() => handleDatePress(item)}
-            >
-              <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
-            </TouchableOpacity>
-          );
-        }}
-        keyExtractor={(_, index) => index.toString()}
-      />
+            return (
+                <TouchableOpacity
+                style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
+                onPress={() => handleDatePress(item)}
+                >
+                <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
+                </TouchableOpacity>
+            );
+            }}
+            keyExtractor={(_, index) => index.toString()}
+        />
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
@@ -158,6 +194,7 @@ export default function MedicationList() {
               <MedicationCardItem medicine={item} selectedDate={selectedDate} />
             </TouchableOpacity>
           )}
+          contentContainerStyle={{paddingBottom: 20}}
         />
       )}
     </View>
@@ -170,6 +207,6 @@ const styles = StyleSheet.create({
   bannerTextContainer: { padding: 20 },
   bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   bannerSubtitle: { fontSize: 12, color: '#fff' },
-  dateList: { marginBottom: 20, padding: 5, height: 100 },
+  dateList: { marginBottom: 10, padding: 5 },
   dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
 });
