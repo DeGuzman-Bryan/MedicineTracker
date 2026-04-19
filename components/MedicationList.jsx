@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications'; // Added Expo Notifications
 import { useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
@@ -15,11 +16,19 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
 import { db } from '../config/FirebaseConfig';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
 import MedicationCardItem from './MedicationCardItem';
+
+// Notification Handler Config
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -33,9 +42,13 @@ export default function MedicationList() {
   const router = useRouter();
 
   const alertedMedsRef = useRef(new Set());
+  const missedAlertedRef = useRef(new Set());
   const intervalRef = useRef(null);
 
   useEffect(() => {
+    // 1. Request Permissions on Mount
+    registerForPushNotificationsAsync();
+
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
@@ -45,6 +58,14 @@ export default function MedicationList() {
 
     return () => clearInterval(intervalRef.current);
   }, [selectedDate]);
+
+  // Request Permission Logic
+  async function registerForPushNotificationsAsync() {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      await Notifications.requestPermissionsAsync();
+    }
+  }
 
   const loadMedications = async (dateToFetch) => {
     try {
@@ -72,31 +93,15 @@ export default function MedicationList() {
       for (const docSnap of querySnapshot.docs) {
         let data = docSnap.data();
         const medId = docSnap.id;
-
-        // --- AUTOMATIC MISSED LOGIC ---
         const existingStatus = data.action?.find(a => a.date === formattedDate);
         
         if (!existingStatus) {
           const medTime = data.reminder || data.time;
           if (medTime) {
-            // Create a moment object for the medication time on the selected date
             const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
-            
-            // If current time is > 1 hour past scheduled time
             if (now.diff(scheduledTime, 'minutes') >= 60) {
-              const missedAction = {
-                date: formattedDate,
-                status: 'Missed',
-                time: medTime
-              };
-
-              // Update Firestore
-              const docRef = doc(db, 'medication', medId);
-              await updateDoc(docRef, {
-                action: arrayUnion(missedAction)
-              });
-
-              // Update local data for immediate UI change
+              const missedAction = { date: formattedDate, status: 'Missed', time: medTime };
+              await updateDoc(doc(db, 'medication', medId), { action: arrayUnion(missedAction) });
               if (!data.action) data.action = [];
               data.action.push(missedAction);
             }
@@ -104,43 +109,62 @@ export default function MedicationList() {
         }
         meds.push({ id: medId, ...data });
       }
-      
       setMedList(meds);
     } catch (e) {
-      console.log('Firestore Error:', e);
+      console.log('Load Error:', e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkMedicineTimes = () => {
+    const now = moment();
+    const currentFormattedTime = now.format('hh:mm A');
+    const todayStr = now.format('MM/DD/YYYY');
+
+    medList.forEach(async (med) => {
+      const medTime = med.reminder || med.time;
+      if (!medTime) return;
+
+      const scheduledTime = moment(`${todayStr} ${medTime}`, 'MM/DD/YYYY hh:mm A');
+      const minutesDiff = now.diff(scheduledTime, 'minutes');
+
+      // 1. SYSTEM NOTIFICATION: IT'S TIME
+      if (currentFormattedTime === medTime && !alertedMedsRef.current.has(med.id)) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "💊 Medication Reminder",
+            body: `It's time to take your ${med.name}.`,
+            data: { medId: med.id },
+          },
+          trigger: null, // Send immediately
+        });
+        alertedMedsRef.current.add(med.id);
+      }
+
+      // 2. SYSTEM NOTIFICATION: MISSED ALERT
+      if (minutesDiff >= 60 && !missedAlertedRef.current.has(med.id)) {
+        const isTaken = med.action?.find(a => a.date === todayStr && a.status === 'Taken');
+        
+        if (!isTaken) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "⚠️ Medication Missed!",
+              body: `You are 1 hour late for your dose of ${med.name}.`,
+              color: '#ff4444'
+            },
+            trigger: null,
+          });
+          missedAlertedRef.current.add(med.id);
+        }
+      }
+    });
   };
 
   const handleDatePress = (item) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedDate(item.formattedDate);
     loadMedications(item.formattedDate);
-  };
-
-  const checkMedicineTimes = () => {
-    const currentFormattedTime = moment().format('hh:mm A'); 
-    medList.forEach((med) => {
-      const medReminder = med.reminder || med.time;
-      if (!medReminder || alertedMedsRef.current.has(med.id)) return;
-
-      if (currentFormattedTime === medReminder) {
-        Toast.show({
-          type: 'success',
-          text1: '💊 Time for Medication',
-          text2: `Take: ${med.name}`,
-          position: 'top',
-          visibilityTime: 5000,
-        });
-        alertedMedsRef.current.add(med.id);
-      }
-    });
-  };
-
-  const formatDay = (day) => {
-    const days = { 'Mon': 'Mon', 'Tue': 'Tues', 'Wed': 'Wed', 'Thu': 'Thurs', 'Fri': 'Fri', 'Sat': 'Sat', 'Sun': 'Sun' };
-    return days[day] || day;
   };
 
   return (
@@ -164,18 +188,17 @@ export default function MedicationList() {
             showsHorizontalScrollIndicator={false}
             style={styles.dateList}
             renderItem={({ item }) => {
-            const isSelected = item.formattedDate === selectedDate;
-            const day = formatDay(moment(item.formattedDate, 'MM/DD/YYYY').format('ddd'));
-            const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
-
-            return (
-                <TouchableOpacity
-                style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
-                onPress={() => handleDatePress(item)}
-                >
-                <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
-                </TouchableOpacity>
-            );
+                const isSelected = item.formattedDate === selectedDate;
+                const dateNum = moment(item.formattedDate, 'MM/DD/YYYY').format('DD');
+                const day = moment(item.formattedDate, 'MM/DD/YYYY').format('ddd');
+                return (
+                    <TouchableOpacity
+                        style={[styles.dateButton, { backgroundColor: isSelected ? '#8b5cf6' : '#F9F9F9' }]}
+                        onPress={() => handleDatePress(item)}
+                    >
+                        <Text style={{ color: isSelected ? '#fff' : '#333', fontWeight: 'bold' }}>{day}, {dateNum}</Text>
+                    </TouchableOpacity>
+                );
             }}
             keyExtractor={(_, index) => index.toString()}
         />

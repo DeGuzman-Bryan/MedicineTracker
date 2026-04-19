@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore'; // Added doc and deleteDoc
+import { useFocusEffect } from 'expo-router';
+import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { useCallback, useState } from 'react';
 import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -11,13 +11,9 @@ import { db } from '../../config/FirebaseConfig';
 
 export default function MedicationHistory() {
   const [medList, setMedList] = useState([]);
-  
-  // Modal states
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   
-  const router = useRouter();
-
   useFocusEffect(
     useCallback(() => {
       loadAllMedications();
@@ -28,10 +24,7 @@ export default function MedicationHistory() {
     try {
       const value = await AsyncStorage.getItem(key);
       return value ? JSON.parse(value) : null;
-    } catch (e) {
-      console.log('Error reading local storage:', e);
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
   const loadAllMedications = async () => {
@@ -44,130 +37,102 @@ export default function MedicationHistory() {
       const meds = [];
       snapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
       setMedList(meds);
-    } catch (e) {
-      console.log('Firestore error:', e);
-      setMedList([]);
-    }
+    } catch (e) { setMedList([]); }
   };
 
-  // --- DELETE FUNCTION ---
   const handleDelete = async () => {
     if (!selectedMed) return;
+    Alert.alert("Delete", "Remove this from history?", [
+      { text: "Cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => {
+          await deleteDoc(doc(db, 'medication', selectedMed.id));
+          setModalVisible(false);
+          loadAllMedications();
+      }}
+    ]);
+  };
 
-    Alert.alert(
-      "Delete Medication",
-      "Are you sure you want to remove this from your history?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive", 
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'medication', selectedMed.id));
-              setModalVisible(false); // Close modal
-              loadAllMedications(); // Refresh list
-            } catch (e) {
-              console.log("Error deleting document: ", e);
-            }
-          } 
-        }
-      ]
-    );
+  // Helper to find the latest action status and date
+  const getActionDetails = (med) => {
+    if (!med?.action || med.action.length === 0) {
+      return { status: 'Pending', date: 'Not yet recorded' };
+    }
+    // Get the most recent action from the array
+    const lastAction = med.action[med.action.length - 1];
+    return {
+      status: lastAction.status || 'Pending',
+      date: lastAction.date || 'N/A'
+    };
   };
 
   return (
     <View style={styles.container}>
-      {/* Header Section */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>History</Text>
         <Text style={styles.subText}>Track your past medication activities</Text>
       </View>
 
-      {/* Medication List */}
       {medList.length === 0 ? (
-        <View style={styles.listContainer}>
-          <EmptyState />
-        </View>
+        <View style={styles.listContainer}><EmptyState /></View>
       ) : (
         <FlatList
           data={medList}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
-                setSelectedMed(item);
-                setModalVisible(true);
-              }}
-            >
-              <MedicationCardItem
-                medicine={item}
-                selectedDate={null}
-                status={item.status}
-              />
+            <TouchableOpacity onPress={() => { setSelectedMed(item); setModalVisible(true); }}>
+              <MedicationCardItem medicine={item} status={item.action?.[0]?.status} />
             </TouchableOpacity>
           )}
           style={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
 
-      {/* --- CUSTOM DETAILS MODAL --- */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
+      <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            
-            {/* Header (Close Button & Delete Icon) */}
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>
-              
-              <View style={styles.headerIcons}>
-                <TouchableOpacity onPress={handleDelete}>
-                  <Ionicons name="trash-outline" size={22} color="#ff4444" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={22} color="#ff4444" />
+              </TouchableOpacity>
             </View>
 
-            {/* Medicine Details */}
             {selectedMed && (
               <View style={styles.detailsContainer}>
                 <Text style={styles.medName}>{selectedMed.name}</Text>
                 
+                {/* Status Row */}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status:</Text>
+                  <Text style={[styles.detailValue, { 
+                    color: getActionDetails(selectedMed).status === 'Taken' ? '#4caf50' : 
+                           getActionDetails(selectedMed).status === 'Missed' ? '#f44336' : '#888' 
+                  }]}>
+                    {getActionDetails(selectedMed).status}
+                  </Text>
+                </View>
+
+                {/* Date Logged Row */}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Date:</Text>
+                  <Text style={styles.detailValue}>
+                    {getActionDetails(selectedMed).date}
+                  </Text>
+                </View>
+
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Time:</Text>
                   <Text style={styles.detailValue}>{selectedMed.time || selectedMed.reminder}</Text>
                 </View>
-                
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Type:</Text>
-                  <Text style={styles.detailValue}>{selectedMed.type?.name || selectedMed.type || 'Capsule'}</Text>
-                </View>
-                
+
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Dose:</Text>
-                  <Text style={styles.detailValue}>{selectedMed.dose || 'N/A'}</Text>
+                  <Text style={styles.detailValue}>{selectedMed.dose} {selectedMed.type?.name || selectedMed.type}</Text>
                 </View>
-
-                {/* Dates Row */}
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Dates:</Text>
-                  <Text style={styles.detailValue}>
-                    {selectedMed.startDate || 'N/A'} {selectedMed.endDate ? `to ${selectedMed.endDate}` : ''}
-                  </Text>
-                </View>
-
               </View>
             )}
-
           </View>
         </View>
       </Modal>
@@ -176,79 +141,16 @@ export default function MedicationHistory() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f3f1ff',
-    paddingHorizontal: 25, 
-  },
-  headerContainer: {
-    marginTop: 45,
-    marginBottom: 20,
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#8b5cf6',
-    paddingHorizontal: 10, 
-  },
-  subText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: 'gray',
-    marginTop: 4,
-    paddingHorizontal: 10, 
-  },
-  listContainer: {
-    flex: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-  },
-  detailsContainer: {
-    marginTop: 5,
-  },
-  medName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  detailLabel: {
-    width: 60,
-    fontSize: 14,
-    color: '#888',
-  },
-  detailValue: {
-    flex: 1, 
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#f3f1ff', paddingHorizontal: 25 },
+  headerContainer: { marginTop: 45, marginBottom: 20 },
+  headerText: { fontSize: 24, fontWeight: '600', color: '#8b5cf6' },
+  subText: { fontSize: 16, color: 'gray', marginTop: 4 },
+  listContainer: { flex: 1 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '80%', backgroundColor: 'white', borderRadius: 20, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  medName: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 15 },
+  detailRow: { flexDirection: 'row', marginBottom: 10 },
+  detailLabel: { width: 70, fontSize: 14, color: '#888' },
+  detailValue: { flex: 1, fontSize: 14, color: '#333', fontWeight: '600' },
 });
