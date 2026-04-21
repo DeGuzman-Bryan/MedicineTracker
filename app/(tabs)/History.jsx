@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
-import { useCallback, useState } from 'react';
+// 1. Swap useFocusEffect for useEffect
+import { collection, deleteDoc, doc, query, where, onSnapshot } from 'firebase/firestore'; 
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import EmptyState from '../../components/EmptyState';
@@ -14,30 +14,78 @@ export default function MedicationHistory() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   
-  useFocusEffect(
-    useCallback(() => {
-      loadAllMedications();
-    }, [])
-  );
+  // 2. Use useEffect with a Map to prevent duplicate key errors
+useEffect(() => {
+    let unsubscribe;
 
-  const getLocalStorage = async (key) => {
-    try {
-      const value = await AsyncStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
-    } catch (e) { return null; }
+    const setupQuery = async () => {
+      try {
+        const value = await AsyncStorage.getItem('userDetails');
+        const user = value ? JSON.parse(value) : null;
+        if (!user?.email) return;
+
+        const q = query(
+          collection(db, 'medication'), 
+          where('userEmail', '==', user.email)
+        );
+
+        // Standardize the listener
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const medsMap = new Map();
+          
+          snapshot.forEach((doc) => {
+            medsMap.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+
+          const sortedMeds = Array.from(medsMap.values()).sort((a, b) => {
+            // Get the latest action for A and B
+            const lastA = a.action?.[a.action.length - 1];
+            const lastB = b.action?.[b.action.length - 1];
+
+            // Convert date strings to timestamps for accurate chronological sorting
+            const timeA = lastA?.date ? new Date(lastA.date).getTime() : 0;
+            const timeB = lastB?.date ? new Date(lastB.date).getTime() : 0;
+
+            // Sort descending (Newest first)
+            // If dates are the same, you could also sub-sort by time strings if needed
+            return timeB - timeA;
+          });
+
+          setMedList(sortedMeds);
+        });
+
+      } catch (e) {
+        console.error("Setup error:", e);
+      }
+    };
+
+    setupQuery();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []); // Keep dependency array empty
+
+  const ensureString = (val) => {
+    if (!val) return 'N/A';
+    if (typeof val === 'object') {
+      if (val.seconds) return new Date(val.seconds * 1000).toLocaleDateString();
+      return JSON.stringify(val);
+    }
+    return String(val);
   };
 
-  const loadAllMedications = async () => {
-    const user = await getLocalStorage('userDetails');
-    if (!user?.email) return;
-
-    try {
-      const q = query(collection(db, 'medication'), where('userEmail', '==', user.email));
-      const snapshot = await getDocs(q);
-      const meds = [];
-      snapshot.forEach((doc) => meds.push({ id: doc.id, ...doc.data() }));
-      setMedList(meds);
-    } catch (e) { setMedList([]); }
+  const getActionDetails = (med) => {
+    if (!med?.action || !Array.isArray(med.action) || med.action.length === 0) {
+      return { status: 'Pending', date: 'Not yet recorded' };
+    }
+    const lastAction = med.action[med.action.length - 1];
+    return {
+      status: ensureString(lastAction.status || 'Pending'),
+      date: ensureString(lastAction.date)
+    };
   };
 
   const handleDelete = async () => {
@@ -45,24 +93,15 @@ export default function MedicationHistory() {
     Alert.alert("Delete", "Remove this from history?", [
       { text: "Cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
-          await deleteDoc(doc(db, 'medication', selectedMed.id));
-          setModalVisible(false);
-          loadAllMedications();
+          try {
+            await deleteDoc(doc(db, 'medication', selectedMed.id));
+            setModalVisible(false);
+            // No need to call loadAllMedications manually!
+          } catch (e) {
+            console.error("Delete error:", e);
+          }
       }}
     ]);
-  };
-
-  // Helper to find the latest action status and date
-  const getActionDetails = (med) => {
-    if (!med?.action || med.action.length === 0) {
-      return { status: 'Pending', date: 'Not yet recorded' };
-    }
-    // Get the most recent action from the array
-    const lastAction = med.action[med.action.length - 1];
-    return {
-      status: lastAction.status || 'Pending',
-      date: lastAction.date || 'N/A'
-    };
   };
 
   return (
@@ -77,10 +116,11 @@ export default function MedicationHistory() {
       ) : (
         <FlatList
           data={medList}
-          keyExtractor={(item) => item.id}
+          // This version is bulletproof: ID + Index
+          keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()} 
           renderItem={({ item }) => (
             <TouchableOpacity onPress={() => { setSelectedMed(item); setModalVisible(true); }}>
-              <MedicationCardItem medicine={item} status={item.action?.[0]?.status} />
+              <MedicationCardItem medicine={item} status={getActionDetails(item).status} />
             </TouchableOpacity>
           )}
           style={styles.listContainer}
@@ -101,9 +141,8 @@ export default function MedicationHistory() {
 
             {selectedMed && (
               <View style={styles.detailsContainer}>
-                <Text style={styles.medName}>{selectedMed.name}</Text>
+                <Text style={styles.medName}>{ensureString(selectedMed.name)}</Text>
                 
-                {/* Status Row */}
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Status:</Text>
                   <Text style={[styles.detailValue, { 
@@ -114,22 +153,21 @@ export default function MedicationHistory() {
                   </Text>
                 </View>
 
-                {/* Date Logged Row */}
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Date:</Text>
-                  <Text style={styles.detailValue}>
-                    {getActionDetails(selectedMed).date}
-                  </Text>
+                  <Text style={styles.detailValue}>{getActionDetails(selectedMed).date}</Text>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Time:</Text>
-                  <Text style={styles.detailValue}>{selectedMed.time || selectedMed.reminder}</Text>
+                  <Text style={styles.detailValue}>{ensureString(selectedMed.time || selectedMed.reminder)}</Text>
                 </View>
 
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Dose:</Text>
-                  <Text style={styles.detailValue}>{selectedMed.dose} {selectedMed.type?.name || selectedMed.type}</Text>
+                  <Text style={styles.detailValue}>
+                    {ensureString(selectedMed.dose)} {ensureString(selectedMed.type?.name || selectedMed.type)}
+                  </Text>
                 </View>
               </View>
             )}

@@ -34,13 +34,32 @@ export default function Index() {
     });
   };
 
+  // Good practice: save as a real Date or Timestamp
+const action = {
+  status: 'Taken',
+  date: new Date(), // Firestore will convert this to a Timestamp object
+};
+
   const UpdateActionStatus = async (status) => {
     try {
+      // Create a clean object with a string date or a JS Date object
+      // Avoid passing the raw 'medicine' params directly into the database
+      const actionData = { 
+        status, 
+        time: moment().format('LT'), 
+        // Ensure date is a simple string to avoid the Object error
+        date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
+      };
+
       await updateDoc(doc(db, 'medication', docId), {
-        action: arrayUnion({ status, time: moment().format('LT'), date: selectedDate }),
+        action: arrayUnion(actionData),
       });
+      
       router.replace('(tabs)');
-    } catch (e) { Alert.alert('Error', 'Failed to update.'); }
+    } catch (e) { 
+      console.error(e);
+      Alert.alert('Error', 'Failed to update.'); 
+    }
   };
 
   // --- THE FIX FOR THE TIMESTAMP STRING ---

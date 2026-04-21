@@ -1,4 +1,4 @@
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import Header from '../../components/Header';
@@ -11,20 +11,19 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getUserDetails();
-  }, []);
-
-  const getUserDetails = async () => {
     const user = auth.currentUser;
-    if (user) {
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
+    if (!user) return;
+
+    // Listen to profile changes in real-time
+    const unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
       if (docSnap.exists()) {
         setUserProfile(docSnap.data());
       }
-    }
-    setLoading(false);
-  };
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   if (loading) {
     return <ActivityIndicator size={'large'} color={'#8b5cf6'} style={{marginTop: '50%'}} />

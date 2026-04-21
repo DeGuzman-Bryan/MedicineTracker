@@ -42,14 +42,28 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
       />
 
       <View style={styles.details}>
-        <Text style={styles.name}>{medicine?.name}</Text>
-        {medicine?.when ? <Text style={styles.when}>{medicine?.when}</Text> : null}
-        {(medicine?.dose || medicine?.type) && (
-          <Text style={styles.dose}>
-            {medicine?.dose || ''} {medicine?.type?.name || (typeof medicine?.type === 'string' ? medicine.type : '')}
+          {/* 1. Name Safety */}
+          <Text style={styles.name}>
+            {typeof medicine?.name === 'object' ? 'Unnamed' : String(medicine?.name || '')}
           </Text>
-        )}
-      </View>
+
+          {/* 2. When Safety */}
+          {medicine?.when ? (
+            <Text style={styles.when}>
+              {typeof medicine.when === 'object' && medicine.when?.seconds
+                ? new Date(medicine.when.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : String(medicine.when)}
+            </Text>
+          ) : null}
+
+          {/* 3. Dose & Type Safety - The most likely crash site */}
+          <Text style={styles.dose}>
+            {String(medicine?.dose || '')} {' '}
+            {medicine?.type?.name 
+              ? String(medicine.type.name) 
+              : (typeof medicine?.type === 'string' ? medicine.type : '')}
+          </Text>
+        </View>
 
       <View style={styles.rightSection}>
         <View style={styles.statusIcon}>
