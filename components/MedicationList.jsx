@@ -232,4 +232,5 @@ const styles = StyleSheet.create({
   bannerSubtitle: { fontSize: 12, color: '#fff' },
   dateList: { marginBottom: 10, padding: 5 },
   dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
-});
+});  
+//SAVE COMPO
