@@ -19,33 +19,38 @@ export default function TabLayout() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         console.log("LOG ✅ Active Session:", user.email);
+        
         try {
+          // 1. Check local storage FIRST for immediate offline access
+          const localData = await AsyncStorage.getItem('userDetails');
+          if (localData) {
+            const parsedData = JSON.parse(localData);
+            if (parsedData.role) {
+              setUserLoggedIn(true);
+              setLoading(false); // Stop loading immediately because we have local data!
+            }
+          }
+
+          // 2. Sync with Firestore in the background
           const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef);
+          const userSnap = await getDoc(userRef); 
           
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            // Save fresh data to local storage
             await AsyncStorage.setItem('userDetails', JSON.stringify(userData));
 
-            // ✅ REDIRECT LOGIC: If role is missing, go to Role Selection
             if (!userData.role) {
-              console.log("LOG ⚠️ No role found, redirecting to Role Selection");
               router.replace('/login/roleSelection');
-              setLoading(false);
-              return; 
+            } else {
+              setUserLoggedIn(true);
             }
-            
-            console.log("LOG 👤 Role Found:", userData.role);
-            setUserLoggedIn(true);
-          } else {
-            // New user with no Firestore document yet
+          } else if (!localData) {
+            // No local data AND no firestore data
             router.replace('/login/roleSelection');
-            setLoading(false);
-            return;
           }
         } catch (error) {
           console.error("Sync error:", error);
+          // If error occurs (like timeout), but we have localData, we already set userLoggedIn to true
         }
       } else {
         console.log("LOG 🚪 User logged out");

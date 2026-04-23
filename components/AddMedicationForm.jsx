@@ -79,8 +79,8 @@ const SaveMedication = async () => {
     }
 
     try {
-      // 3. Save to Firestore
-      const docRef = doc(db, 'medication', docId);
+      // 3. Prepare the Data
+      const docRef = doc(db, 'Medication', docId); // Note: Ensure collection name matches your Home Screen query ('Medication')
       const dataToSave = {
         ...formData,
         userEmail: user?.email || 'guest',
@@ -92,21 +92,19 @@ const SaveMedication = async () => {
         when: formData.when || '',
       };
 
+      // 4. Save to Firestore (REMOVE THE AWAIT)
+      // We don't 'await' here because we want the app to keep moving even if offline
       if (isEditing) {
-        await updateDoc(docRef, dataToSave);
+        updateDoc(docRef, dataToSave);
       } else {
-        await setDoc(docRef, dataToSave);
+        setDoc(docRef, dataToSave);
       }
 
-      // 4. Handle Notifications (FIXED LOGIC)
-      const permissionGranted = await requestPermissions(); // Use a clear variable name
-      
+      // 5. Handle Notifications (background task)
+      const permissionGranted = await requestPermissions();
       if (permissionGranted) {
-          // Convert string "10:30 AM" to a Date object the scheduler can read
-          // Add this inside your SaveMedication function
-          const [time, modifier] = formData.reminder.split(' '); // "08:00", "PM"
+          const [time, modifier] = formData.reminder.split(' ');
           let [hours, minutes] = time.split(':');
-
           hours = parseInt(hours, 10);
           minutes = parseInt(minutes, 10);
 
@@ -116,21 +114,21 @@ const SaveMedication = async () => {
           const triggerDate = new Date();
           triggerDate.setHours(hours, minutes, 0, 0);
 
-          // If the time is already in the past today, add +1 day
           if (triggerDate <= new Date()) {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
 
-          await scheduleMedicationNotification(
+          scheduleMedicationNotification(
               formData.name,
               `Dose: ${formData.dose || 'Take your medicine'}`,
               triggerDate 
           );
       }
 
-      Alert.alert('Success', isEditing ? 'Updated!' : 'Saved!', [
-        { text: 'OK', onPress: () => router.replace('(tabs)') }
-      ]);
+      // 6. Navigate Home Immediately
+      // Instead of an Alert.alert with a button, we go back now so it feels instant
+      router.replace('(tabs)');
+
     } catch (e) { 
       console.error("Save Error:", e);
       Alert.alert('Error', 'Failed to save medication.'); 

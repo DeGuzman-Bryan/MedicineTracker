@@ -1,7 +1,7 @@
 // config/FirebaseConfig.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -13,10 +13,16 @@ const firebaseConfig = {
   appId: "1:298214109367:web:f410e9bda981840139dd32",
   measurementId: "G-QY1RFG0168",
 };
+// 2. Initialize the Firebase App (Declare this ONLY ONCE)
+export const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Export Auth and Firestore instances
+// 3. Initialize Auth using the app instance above
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// 4. Initialize Firestore with Persistence (Offline Support)
+// We use initializeFirestore instead of getFirestore(app)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
