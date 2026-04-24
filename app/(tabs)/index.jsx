@@ -17,22 +17,21 @@ export default function HomeScreen() {
     const init = async () => {
       const user = await getLocalStorage('userDetails');
       
-      if (!user) { 
+      if (!user || !user.email) { 
         router.replace('/login/signIn'); 
         return; 
       }
       
-      // If user exists but role is missing, go to selection
       if (!user.role) { 
         router.replace('/login/roleSelection'); 
         return; 
       }
 
-      const emailToWatch = (user.role === 'caregiver' && user.linkedPatientEmail) 
-        ? user.linkedPatientEmail 
-        : user.email;
-
-      const q = query(collection(db, 'medication'), where('userEmail', '==', emailToWatch));
+      // 🌟 THE SYNC FIX: Querying by array-contains user.email
+      const q = query(
+        collection(db, 'medication'), 
+        where('accessibleBy', 'array-contains', user.email)
+      );
       
       unsubscribe = onSnapshot(q, (snapshot) => {
         const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

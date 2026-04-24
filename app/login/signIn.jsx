@@ -1,9 +1,9 @@
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore'; // Added for role check
+import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { auth, db } from '../../config/FirebaseConfig'; // Ensure db is imported
+import { auth, db } from '../../config/FirebaseConfig';
 import Colors from '../../Constant/Colors';
 import { setLocalStorage } from '../../service/Storage';
 
@@ -16,7 +16,6 @@ export default function SignIn() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // If Firebase already has a session, verify role before redirecting
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists() && userDoc.data().role) {
           router.replace('(tabs)');
@@ -40,16 +39,20 @@ export default function SignIn() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // --- CRITICAL FIX: Check Database for Role ---
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       
       if (userDoc.exists() && userDoc.data().role) {
-        // User already has a role saved, update local storage and go to dashboard
-        await setLocalStorage('userDetails', userDoc.data());
+        
+        // 🌟 THE SYNC FIX: Guarantee both user email and partner emails save properly
+        const finalUserData = {
+          ...userDoc.data(),
+          email: user.email // Hard-saving this guarantees it's always available
+        };
+
+        await setLocalStorage('userDetails', finalUserData);
         console.log('✅ Role found, going to Dashboard');
         router.replace('(tabs)');
       } else {
-        // No role found in DB, go to Role Selection
         console.log('⚠️ No role found, going to Role Selection');
         router.replace('/login/roleSelection');
       }

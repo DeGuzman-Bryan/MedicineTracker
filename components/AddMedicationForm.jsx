@@ -63,7 +63,6 @@ export default function AddMedicationForm() {
     const isEditing = !!params?.docId;
     const docId = isEditing ? params.docId : Date.now().toString();
     
-    // 1. Get the user currently logged into the phone
     const userString = await AsyncStorage.getItem('userDetails');
     const user = JSON.parse(userString);
 
@@ -83,19 +82,21 @@ export default function AddMedicationForm() {
     try {
       const docRef = doc(db, 'medication', docId);
       
-      // 🌟 THE ULTIMATE SYNC FIX 🌟
-      // We grab whoever is logged in, PLUS any variation of their partner's email
+      // 🌟 THE FIX: Grab absolutely every variation of the partner's email from the database
       const myEmail = user?.email;
-      const partnerEmail = user?.linkedEmail || user?.patientEmail || user?.caregiverEmail;
+      const partnerEmail = 
+        user?.linkedPatientEmail || 
+        user?.linkedCaregiverEmail || 
+        user?.patientEmail || 
+        user?.caregiverEmail || 
+        user?.linkedEmail;
 
-      // Put them both into an array and remove any empty values
       const accessArray = [myEmail, partnerEmail].filter(Boolean);
 
       const dataToSave = {
         ...formData,
-        // userEmail tracks who originally created it, but accessibleBy gives the access
         userEmail: myEmail || 'guest',
-        accessibleBy: accessArray, // <--- THIS is what allows both to see and edit!
+        accessibleBy: accessArray, 
         docId,
         startDate: effectiveStart,
         dates: datesArray,

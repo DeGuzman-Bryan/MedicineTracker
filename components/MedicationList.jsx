@@ -21,7 +21,6 @@ import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
 import MedicationCardItem from './MedicationCardItem';
 
-// Notification Handler Config
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -46,9 +45,7 @@ export default function MedicationList() {
   const intervalRef = useRef(null);
 
   useEffect(() => {
-    // 1. Request Permissions on Mount
     registerForPushNotificationsAsync();
-
     setDateRange(GetDateRangeToDisplay());
     loadMedications(selectedDate);
 
@@ -59,7 +56,6 @@ export default function MedicationList() {
     return () => clearInterval(intervalRef.current);
   }, [selectedDate]);
 
-  // Request Permission Logic
   async function registerForPushNotificationsAsync() {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') {
@@ -72,19 +68,14 @@ export default function MedicationList() {
       setLoading(true);
       const userStr = await AsyncStorage.getItem('userDetails');
       const user = userStr ? JSON.parse(userStr) : null;
-      if (!user) return;
-
-      const targetEmail = user.role === 'caregiver' && user.linkedPatientEmail 
-        ? user.linkedPatientEmail 
-        : user.email;
+      if (!user || !user.email) return;
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
       
-      // FIX 1: Explicitly using lowercase 'medication' collection
+      // 🌟 FIX 1: We only query accessibleBy to prevent Firebase from crashing
       const q = query(
         collection(db, 'medication'), 
-        where('userEmail', '==', targetEmail),
-        where('dates', 'array-contains', formattedDate)
+        where('accessibleBy', 'array-contains', user.email)
       );
 
       const querySnapshot = await getDocs(q);
@@ -93,6 +84,12 @@ export default function MedicationList() {
 
       for (const docSnap of querySnapshot.docs) {
         let data = docSnap.data();
+        
+        // 🌟 FIX 2: We filter the dates manually using JavaScript!
+        if (!data.dates || !data.dates.includes(formattedDate)) {
+            continue; // Skip this medicine if it is not scheduled for the selected date
+        }
+
         const medId = docSnap.id;
         const existingStatus = data.action?.find(a => a.date === formattedDate);
         
@@ -102,7 +99,6 @@ export default function MedicationList() {
             const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
             if (now.diff(scheduledTime, 'minutes') >= 60) {
               const missedAction = { date: formattedDate, status: 'Missed', time: medTime };
-              // FIX 2: Explicitly using lowercase 'medication' collection here too
               await updateDoc(doc(db, 'medication', medId), { action: arrayUnion(missedAction) });
               if (!data.action) data.action = [];
               data.action.push(missedAction);
@@ -131,7 +127,6 @@ export default function MedicationList() {
       const scheduledTime = moment(`${todayStr} ${medTime}`, 'MM/DD/YYYY hh:mm A');
       const minutesDiff = now.diff(scheduledTime, 'minutes');
 
-      // 1. SYSTEM NOTIFICATION: IT'S TIME
       if (currentFormattedTime === medTime && !alertedMedsRef.current.has(med.id)) {
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -139,12 +134,11 @@ export default function MedicationList() {
             body: `It's time to take your ${med.name}.`,
             data: { medId: med.id },
           },
-          trigger: null, // Send immediately
+          trigger: null, 
         });
         alertedMedsRef.current.add(med.id);
       }
 
-      // 2. SYSTEM NOTIFICATION: MISSED ALERT
       if (minutesDiff >= 60 && !missedAlertedRef.current.has(med.id)) {
         const isTaken = med.action?.find(a => a.date === todayStr && a.status === 'Taken');
         
