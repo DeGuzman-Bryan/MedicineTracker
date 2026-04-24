@@ -1,224 +1,230 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
-import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
+import { getLocalStorage, setLocalStorage } from '../../service/Storage';
+import { requestPermissions } from '../../service/notifications';
 
 export default function Profile() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isModalVisible, setModalVisible] = useState(false);
-  const [patientCode, setPatientCode] = useState('');
-  const [linking, setLinking] = useState(false);
+  const [patientId, setPatientId] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchUserData();
-    }, [])
-  );
+  useEffect(() => {
+    getUserData();
+  }, []);
 
-  const fetchUserData = async () => {
+  const getUserData = async () => {
+    const user = await getLocalStorage('userDetails');
+    setUserData(user);
+  };
+
+  // --- FIXED TEST NOTIFICATION ---
+  const sendTestNotification = async () => {
+    const hasPermission = await requestPermissions();
+    
+    if (!hasPermission) {
+      Alert.alert("Permission Denied", "Please enable notifications in your phone settings.");
+      return;
+    }
+
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        setUserData(userSnap.data());
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "💊 Medication Reminder Test",
+          body: "It works! This is how your daily reminders will look.",
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+        },
+        trigger: {
+          seconds: 5,
+          channelId: 'default', // FIX: Satisfies the Dev Build requirement
+        },
+      });
+
+      Alert.alert("Scheduled!", "Notification will arrive in 5 seconds. Close the app or lock your screen now!");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Could not schedule notification. Check your console.");
+    }
+  };
+
+  const handleConnectPatient = async () => {
+    if (!patientId.trim()) {
+      Alert.alert('Error', 'Please enter a Patient Code');
+      return;
+    }
+    setLoading(true);
+    try {
+      const patientDoc = await getDoc(doc(db, 'users', patientId.trim()));
+      if (!patientDoc.exists()) {
+        Alert.alert('Error', 'Invalid Code. Patient not found.');
+        return;
       }
-    } catch (err) {
-      console.error('Error fetching:', err);
+
+      const patientData = patientDoc.data();
+
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        linkedPatientId: patientId.trim(),
+        linkedPatientEmail: patientData.email,
+        linkedPatientName: patientData.fullName
+      });
+
+      const updatedUser = { 
+        ...userData, 
+        linkedPatientId: patientId.trim(),
+        linkedPatientEmail: patientData.email,
+        linkedPatientName: patientData.fullName
+      };
+      await setLocalStorage('userDetails', updatedUser);
+      setUserData(updatedUser);
+
+      Alert.alert('Success', `Connected to ${patientData.fullName}'s records!`);
+      setPatientId('');
+    } catch (error) {
+      Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Link or CHANGE a Patient
-  const handleLinkPatient = async () => {
-    if (!patientCode.trim()) {
-      Alert.alert("Error", "Please enter a code.");
-      return;
-    }
-    setLinking(true);
-    try {
-      const patientRef = doc(db, 'users', patientCode.trim());
-      const patientSnap = await getDoc(patientRef);
-
-      if (!patientSnap.exists()) {
-        Alert.alert("Error", "Invalid Patient Code.");
-        return;
-      }
-
-      const patientData = patientSnap.data();
-      const caregiverRef = doc(db, 'users', auth.currentUser.uid);
-      
-      const updateData = {
-        linkedPatientId: patientCode.trim(),
-        linkedPatientEmail: patientData.email, 
-        linkedPatientName: patientData.fullName || patientData.userName
-      };
-
-      await updateDoc(caregiverRef, updateData);
-      Alert.alert("Success", `Now monitoring ${updateData.linkedPatientName}`);
-      setModalVisible(false);
-      setPatientCode('');
-      fetchUserData(); 
-    } catch (err) {
-      Alert.alert("Error", "Failed to link.");
-    } finally {
-      setLinking(false);
-    }
-  };
-
-  // ✅ NEW: Disconnect current patient
-  const handleDisconnect = async () => {
-    Alert.alert('Disconnect', 'Stop monitoring this patient?', [
-      { text: 'Cancel', style: 'cancel' },
+  const handleLogout = async () => {
+    Alert.alert('Logout', 'Are you sure?', [
+      { text: 'Cancel' },
       { 
-        text: 'Stop', 
-        style: 'destructive', 
+        text: 'Logout', 
         onPress: async () => {
-          const userRef = doc(db, 'users', auth.currentUser.uid);
-          await updateDoc(userRef, {
-            linkedPatientId: deleteField(),
-            linkedPatientEmail: deleteField(),
-            linkedPatientName: deleteField()
-          });
-          fetchUserData();
+          await signOut(auth);
+          await AsyncStorage.removeItem('userDetails');
+          router.replace('/login/signIn');
         } 
       }
     ]);
   };
 
-  const onShareID = async () => {
-    await Share.share({ message: `My Patient Code: ${auth.currentUser.uid}` });
-  };
-
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure?', [
-      { text: 'Cancel' },
-      { text: 'Logout', onPress: async () => {
-          await signOut(auth);
-          await AsyncStorage.removeItem('userDetails');
-          router.replace('/login/signIn');
-      }}
-    ]);
-  };
-
-  if (loading) return <ActivityIndicator size="large" style={{flex:1}} />;
-
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerText}>My Profile</Text>
-      </View>
+      <Text style={styles.headerTitle}>Profile</Text>
 
       {userData && (
         <View style={styles.profileCard}>
-          <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
           <Text style={styles.name}>{userData.fullName}</Text>
-          <Text style={styles.username}>@{userData.userName}</Text>
+          <Text style={styles.email}>{userData.email}</Text>
           
-          <View style={styles.roleBox}><Text style={styles.roleLabel}>{userData.role?.toUpperCase()}</Text></View>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleText}>{userData.role?.toUpperCase()}</Text>
+          </View>
 
-          {/* CAREGIVER SECTION */}
+          {/* CAREGIVER SECTION: Paste Patient Code */}
           {userData.role === 'caregiver' && (
-            <View style={{ width: '100%' }}>
+            <View style={styles.connectSection}>
+              <Text style={styles.idLabel}>Connect to Patient:</Text>
               {userData.linkedPatientName ? (
-                <View style={styles.monitorCard}>
-                  <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
-                      <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
-                      <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={styles.linkedInfo}>
+                  <Text style={styles.linkedText}>Linked to: {userData.linkedPatientName}</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="green" />
                 </View>
               ) : (
-                <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
-                  <Text style={styles.linkBtnText}>Link to Patient</Text>
-                </TouchableOpacity>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Paste Patient Code Here"
+                    value={patientId}
+                    onChangeText={setPatientId}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity 
+                    style={styles.connectBtn} 
+                    onPress={handleConnectPatient}
+                    disabled={loading}
+                  >
+                    <Ionicons name="link" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           )}
 
-          {/* PATIENT SECTION */}
+          {/* PATIENT SECTION: Show Share Code */}
           {userData.role === 'patient' && (
-            <View style={styles.idBox}>
-              <Text style={styles.idLabel}>YOUR PATIENT CODE:</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-                <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
-                <TouchableOpacity onPress={onShareID}><Ionicons name="share-social" size={18} color="#8b5cf6" /></TouchableOpacity>
+            <View style={styles.idSection}>
+              <Text style={styles.idLabel}>Your Share Code:</Text>
+              <View style={styles.copyBox}>
+                <Text style={styles.idText} numberOfLines={1}>{userData.uid}</Text>
               </View>
             </View>
           )}
+
+          {/* TEST NOTIFICATION BUTTON */}
+          <View style={[styles.idSection, { marginTop: 15 }]}>
+            <Text style={styles.idLabel}>System Tools</Text>
+            <TouchableOpacity 
+              style={styles.testButton} 
+              onPress={sendTestNotification}
+            >
+              <Ionicons name="notifications-outline" size={20} color="#8b5cf6" />
+              <Text style={styles.testButtonText}>Test Notification</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
-      <TouchableOpacity style={styles.btnHome} onPress={() => router.push('/')}><Text style={styles.btnText}>Home</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}><Text style={styles.btnText}>Logout</Text></TouchableOpacity>
-
-      <Modal visible={isModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter Patient Code</Text>
-            <TextInput style={styles.input} placeholder="Paste ID here" value={patientCode} onChangeText={setPatientCode} autoCapitalize="none" />
-            <View style={styles.modalBtns}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}><Text>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
-                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff'}}>Save</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={20} color="#ff4d4d" />
+        <Text style={styles.logoutText}>Logout</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 25, backgroundColor: '#f3f1ff' },
-  headerContainer: { marginTop: 40, marginBottom: 20, alignItems: 'center' },
-  headerText: { fontSize: 24, fontWeight: 'bold', color: '#5b21b6' },
-  profileCard: { backgroundColor: '#fff', padding: 20, borderRadius: 20, alignItems: 'center', elevation: 4 },
-  name: { fontSize: 20, fontWeight: 'bold' },
-  username: { color: '#666', marginBottom: 10 },
-  roleBox: { backgroundColor: '#f3f1ff', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 20, marginBottom: 15 },
-  roleLabel: { fontSize: 12, color: '#8b5cf6', fontWeight: 'bold' },
-  monitorCard: { backgroundColor: '#f0fdf4', padding: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
-  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#166534' },
-  actionRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center' },
-  actionText: { fontSize: 13, fontWeight: 'bold', color: '#8b5cf6' },
-  linkBtn: { backgroundColor: '#8b5cf6', padding: 15, borderRadius: 12, alignItems: 'center' },
-  linkBtnText: { color: '#fff', fontWeight: 'bold' },
-  idBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
-  idLabel: { fontSize: 10, color: '#666', fontWeight: 'bold' },
-  idValue: { fontSize: 11, fontWeight: 'bold', color: '#333' },
-  btnHome: { backgroundColor: '#6d28d9', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' },
-  btnLogout: { backgroundColor: '#e74c3c', padding: 16, borderRadius: 12, marginTop: 10, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', width: '80%', padding: 25, borderRadius: 20 },
-  modalTitle: { fontWeight: 'bold', marginBottom: 15 },
-  input: { backgroundColor: '#f1f5f9', padding: 12, borderRadius: 10, marginBottom: 20 },
-  modalBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, alignItems: 'center' },
-  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }
+  headerTitle: { fontSize: 28, fontWeight: 'bold', marginTop: 40, marginBottom: 20 },
+  profileCard: { 
+    backgroundColor: '#fff', padding: 20, borderRadius: 20, elevation: 3,
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10
+  },
+  name: { fontSize: 22, fontWeight: 'bold' },
+  email: { fontSize: 16, color: 'gray', marginBottom: 10 },
+  roleBadge: { 
+    alignSelf: 'flex-start', backgroundColor: '#8b5cf6', 
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, marginBottom: 20 
+  },
+  roleText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  idSection: { borderTopWidth: 1, borderColor: '#eee', paddingTop: 15 },
+  connectSection: { borderTopWidth: 1, borderColor: '#eee', paddingTop: 15, paddingBottom: 15 },
+  idLabel: { fontSize: 14, color: 'gray', marginBottom: 8 },
+  inputRow: { flexDirection: 'row', gap: 10 },
+  textInput: { 
+    flex: 1, backgroundColor: '#f9f9f9', padding: 12, 
+    borderRadius: 10, borderWidth: 1, borderColor: '#ddd' 
+  },
+  connectBtn: { 
+    backgroundColor: '#8b5cf6', padding: 12, 
+    borderRadius: 10, justifyContent: 'center' 
+  },
+  linkedInfo: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#f0fff4', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#c6f6d5'
+  },
+  linkedText: { color: '#2f855a', fontWeight: '500' },
+  copyBox: { backgroundColor: '#f9f9f9', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' },
+  idText: { fontSize: 14, color: '#333' },
+  testButton: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
+    padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8b5cf6', backgroundColor: '#f5f3ff'
+  },
+  testButtonText: { color: '#8b5cf6', fontWeight: 'bold', marginLeft: 10 },
+  logoutButton: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
+    marginTop: 30, padding: 15, borderRadius: 15, backgroundColor: '#fff', 
+    borderWidth: 1, borderColor: '#ff4d4d'
+  },
+  logoutText: { color: '#ff4d4d', fontWeight: 'bold', marginLeft: 10 }
 });

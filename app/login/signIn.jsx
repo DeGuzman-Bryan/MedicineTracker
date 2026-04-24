@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; // Added for role check
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { auth } from '../../config/FirebaseConfig';
+import { auth, db } from '../../config/FirebaseConfig'; // Ensure db is imported
 import Colors from '../../Constant/Colors';
 import { setLocalStorage } from '../../service/Storage';
 
@@ -13,9 +14,15 @@ export default function SignIn() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        router.replace('(tabs)');
+        // If Firebase already has a session, verify role before redirecting
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists() && userDoc.data().role) {
+          router.replace('(tabs)');
+        } else {
+          router.replace('/login/roleSelection');
+        }
       } else {
         setLoading(false);
       }
@@ -32,10 +39,21 @@ export default function SignIn() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      console.log('✅ Logged in user:', user.email);
-      await setLocalStorage('userDetails', user);
-      Alert.alert('Success', 'Logged in successfully!');
-      router.replace('(tabs)');
+      
+      // --- CRITICAL FIX: Check Database for Role ---
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
+      if (userDoc.exists() && userDoc.data().role) {
+        // User already has a role saved, update local storage and go to dashboard
+        await setLocalStorage('userDetails', userDoc.data());
+        console.log('✅ Role found, going to Dashboard');
+        router.replace('(tabs)');
+      } else {
+        // No role found in DB, go to Role Selection
+        console.log('⚠️ No role found, going to Role Selection');
+        router.replace('/login/roleSelection');
+      }
+
     } catch (error) {
       console.error('❌ Login error:', error);
       if (error.code === 'auth/user-not-found') {

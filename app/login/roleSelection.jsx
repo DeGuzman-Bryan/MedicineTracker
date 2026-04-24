@@ -3,7 +3,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
-import Colors from '../../Constant/Colors';
+import { setLocalStorage } from '../../service/Storage';
 
 export default function RoleSelection() {
   const router = useRouter();
@@ -13,23 +13,27 @@ export default function RoleSelection() {
     setLoading(true);
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error("No user found. Please log in again.");
+      if (!user) throw new Error("Session expired. Please login again.");
 
-      // Save user profile & role to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        name: user.displayName,
+      const userData = {
+        fullName: user.displayName || user.email.split('@')[0],
         email: user.email,
-        role: selectedRole, // 'patient' or 'caregiver'
+        role: selectedRole,
         uid: user.uid,
-        createdAt: new Date(),
-      }, { merge: true });
+        updatedAt: new Date().toISOString()
+      };
 
-      // Move to the main app
+      // 1. Save to Database
+      await setDoc(doc(db, 'users', user.uid), userData, { merge: true });
+
+      // 2. Save to Local Storage (Crucial to stop the loop)
+      await setLocalStorage('userDetails', userData);
+
+      // 3. Move to Dashboard
       router.replace('/(tabs)');
-      
     } catch (error) {
-      console.error(error);
-      Alert.alert("Selection Error", error.message);
+      Alert.alert("Error", error.message);
+      router.replace('/login/signIn');
     } finally {
       setLoading(false);
     }
@@ -37,29 +41,16 @@ export default function RoleSelection() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>One last step!</Text>
-      <Text style={styles.subtitle}>Are you tracking your own meds or helping someone else?</Text>
-
+      <Text style={styles.title}>Who are you?</Text>
       {loading ? (
-        <ActivityIndicator size="large" color={Colors.PRIMARY} />
+        <ActivityIndicator size="large" color="#8b5cf6" />
       ) : (
-        <View style={styles.cardContainer}>
-          <TouchableOpacity 
-            style={styles.roleCard} 
-            onPress={() => handleRoleSelect('patient')}
-          >
-            <Text style={styles.emoji}>💊</Text>
-            <Text style={styles.roleTitle}>I am a Patient</Text>
-            <Text style={styles.roleDesc}>I will manage my own medication schedule.</Text>
+        <View style={{gap: 20, width: '100%'}}>
+          <TouchableOpacity style={styles.card} onPress={() => handleRoleSelect('patient')}>
+            <Text style={styles.cardText}>💊 I am a Patient</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.roleCard} 
-            onPress={() => handleRoleSelect('caregiver')}
-          >
-            <Text style={styles.emoji}>🫂</Text>
-            <Text style={styles.roleTitle}>I am a Caregiver</Text>
-            <Text style={styles.roleDesc}>I will monitor a patient's medication intake.</Text>
+          <TouchableOpacity style={styles.card} onPress={() => handleRoleSelect('caregiver')}>
+            <Text style={styles.cardText}>🫂 I am a Caregiver</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -68,19 +59,8 @@ export default function RoleSelection() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 25, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', color: Colors.PRIMARY, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginVertical: 20 },
-  cardContainer: { gap: 20 },
-  roleCard: {
-    backgroundColor: '#F0F8FF',
-    padding: 20,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Colors.PRIMARY,
-    alignItems: 'center',
-  },
-  emoji: { fontSize: 40, marginBottom: 10 },
-  roleTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  roleDesc: { fontSize: 14, color: '#777', textAlign: 'center', marginTop: 5 },
+  container: { flex: 1, padding: 25, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 30 },
+  card: { width: '100%', padding: 20, borderRadius: 15, backgroundColor: '#f3f1ff', borderWidth: 1, borderColor: '#8b5cf6' },
+  cardText: { fontSize: 18, textAlign: 'center', fontWeight: '600' }
 });

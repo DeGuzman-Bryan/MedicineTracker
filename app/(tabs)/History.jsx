@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// 1. Swap useFocusEffect for useEffect
 import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -14,7 +13,6 @@ export default function MedicationHistory() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedMed, setSelectedMed] = useState(null);
   
-  // 2. Use useEffect with a Map to prevent duplicate key errors
   useEffect(() => {
     let unsubscribe;
 
@@ -24,13 +22,13 @@ export default function MedicationHistory() {
         const user = value ? JSON.parse(value) : null;
         if (!user?.email) return;
 
-        // FIX 1: Changed 'medication' to 'Medication'
+        // 🌟 FETCH SHARED HISTORY 🌟
+        // "Find any medicine where MY email is listed in the accessibleBy list"
         const q = query(
-          collection(db, 'Medication'), 
-          where('userEmail', '==', user.email)
+          collection(db, 'medication'), 
+          where('accessibleBy', 'array-contains', user.email)
         );
 
-        // Standardize the listener
         unsubscribe = onSnapshot(q, (snapshot) => {
           const medsMap = new Map();
           
@@ -39,16 +37,12 @@ export default function MedicationHistory() {
           });
 
           const sortedMeds = Array.from(medsMap.values()).sort((a, b) => {
-            // Get the latest action for A and B
             const lastA = a.action?.[a.action.length - 1];
             const lastB = b.action?.[b.action.length - 1];
 
-            // Convert date strings to timestamps for accurate chronological sorting
             const timeA = lastA?.date ? new Date(lastA.date).getTime() : 0;
             const timeB = lastB?.date ? new Date(lastB.date).getTime() : 0;
 
-            // Sort descending (Newest first)
-            // If dates are the same, you could also sub-sort by time strings if needed
             return timeB - timeA;
           });
 
@@ -67,7 +61,7 @@ export default function MedicationHistory() {
         unsubscribe();
       }
     };
-  }, []); // Keep dependency array empty
+  }, []); 
 
   const ensureString = (val) => {
     if (!val) return 'N/A';
@@ -91,12 +85,11 @@ export default function MedicationHistory() {
 
   const handleDelete = async () => {
     if (!selectedMed) return;
-    Alert.alert("Delete", "Remove this from history?", [
+    Alert.alert("Delete", "Remove this from history? This deletes it for both users.", [
       { text: "Cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
           try {
-            // FIX 2: Changed 'medication' to 'Medication' so delete actually works
-            await deleteDoc(doc(db, 'Medication', selectedMed.id));
+            await deleteDoc(doc(db, 'medication', selectedMed.id));
             setModalVisible(false);
           } catch (e) {
             console.error("Delete error:", e);
@@ -109,7 +102,7 @@ export default function MedicationHistory() {
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <Text style={styles.headerText}>History</Text>
-        <Text style={styles.subText}>Track your past medication activities</Text>
+        <Text style={styles.subText}>Track shared medication activities</Text>
       </View>
 
       {medList.length === 0 ? (
@@ -117,7 +110,6 @@ export default function MedicationHistory() {
       ) : (
         <FlatList
           data={medList}
-          // This version is bulletproof: ID + Index
           keyExtractor={(item, index) => item.id ? `${item.id}-${index}` : index.toString()} 
           renderItem={({ item }) => (
             <TouchableOpacity onPress={() => { setSelectedMed(item); setModalVisible(true); }}>
