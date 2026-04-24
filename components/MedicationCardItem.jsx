@@ -42,12 +42,10 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
       />
 
       <View style={styles.details}>
-          {/* 1. Name Safety */}
           <Text style={styles.name}>
             {typeof medicine?.name === 'object' ? 'Unnamed' : String(medicine?.name || '')}
           </Text>
 
-          {/* 2. When Safety */}
           {medicine?.when ? (
             <Text style={styles.when}>
               {typeof medicine.when === 'object' && medicine.when?.seconds
@@ -56,7 +54,6 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
             </Text>
           ) : null}
 
-          {/* 3. Dose & Type Safety - The most likely crash site */}
           <Text style={styles.dose}>
             {String(medicine?.dose || '')} {' '}
             {medicine?.type?.name 

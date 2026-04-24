@@ -8,22 +8,27 @@ import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 
-export default function Index() {
+export default function ActionModal() {
   const medicine = useLocalSearchParams(); 
   const { selectedDate, reminder, docId } = medicine;
   const router = useRouter();
 
-  // Optimized Delete: Works instantly offline
   const onDeletePress = () => {
+    if (!docId) {
+      Alert.alert('Error', 'Medication ID is missing.');
+      return;
+    }
+
     Alert.alert('Delete Medication', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
+      { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            // No 'await' here so it happens locally immediately
-            deleteDoc(doc(db, 'Medication', docId)).catch(() => {});
+            // FIX 1: Changed 'Medication' to 'medication' & added 'await'
+            await deleteDoc(doc(db, 'medication', docId));
             ToastAndroid.show("Deleted successfully", ToastAndroid.SHORT);
             router.replace('(tabs)'); 
           } catch (e) { 
+            console.error("Delete Error:", e);
             Alert.alert('Error', 'Could not delete.'); 
           }
       }},
@@ -40,8 +45,12 @@ export default function Index() {
     });
   };
 
-  // Optimized Status Update: Works instantly offline
   const UpdateActionStatus = async (status) => {
+    if (!docId) {
+      Alert.alert('Error', 'Cannot update. Medication ID is missing.');
+      return;
+    }
+
     try {
       const actionData = { 
         status, 
@@ -49,22 +58,21 @@ export default function Index() {
         date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
       };
 
-      const docRef = doc(db, 'Medication', docId);
+      // FIX 2: Changed 'Medication' to 'medication' to match your Firestore database
+      const docRef = doc(db, 'medication', docId);
 
-      // We trigger the update without 'await'. 
-      // Firestore saves this to the phone's disk and notifies the Home Screen.
-      updateDoc(docRef, { action: arrayUnion(actionData) })
-        .then(() => console.log("Action queued for sync"))
-        .catch((e) => console.log("Local save only:", e));
+      // FIX 3: Added 'await' so the component doesn't unmount while writing
+      await updateDoc(docRef, { action: arrayUnion(actionData) });
+      console.log("Action updated successfully");
 
       const state = await NetInfo.fetch();
       if (!state.isConnected) {
-        ToastAndroid.show("Saved offline! Will sync later.", ToastAndroid.SHORT);
+        ToastAndroid.show("Saved offline! Will sync when connected.", ToastAndroid.SHORT);
       }
 
       router.replace('(tabs)');
     } catch (e) { 
-      console.error(e);
+      console.error("Update Error:", e);
       Alert.alert('Error', 'Failed to update.'); 
     }
   };

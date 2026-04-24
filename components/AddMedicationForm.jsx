@@ -78,7 +78,8 @@ export default function AddMedicationForm() {
     }
 
     try {
-      const docRef = doc(db, 'Medication', docId);
+      // FIX: Changed to lowercase 'medication' collection
+      const docRef = doc(db, 'medication', docId);
       const dataToSave = {
         ...formData,
         userEmail: user?.email || 'guest',

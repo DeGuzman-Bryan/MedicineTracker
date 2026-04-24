@@ -15,7 +15,6 @@ export default function TabLayout() {
   const [userLoggedIn, setUserLoggedIn] = useState(false);
 
   useEffect(() => {
-    // 1. Check local storage IMMEDIATELY on app start
     const checkLocalSession = async () => {
       try {
         const localData = await AsyncStorage.getItem('userDetails');
@@ -23,7 +22,6 @@ export default function TabLayout() {
           const parsedData = JSON.parse(localData);
           if (parsedData) {
             setUserLoggedIn(true);
-            // We don't stop loading yet; we wait for Firebase to confirm the auth state
           }
         }
       } catch (e) {
@@ -33,20 +31,16 @@ export default function TabLayout() {
 
     checkLocalSession();
 
-    // 2. Listen for Firebase Auth changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Firebase confirms we have a session
         setUserLoggedIn(true);
         setLoading(false);
       } else {
-        // Double check local storage before kicking them out
         const localData = await AsyncStorage.getItem('userDetails');
         if (!localData) {
           setUserLoggedIn(false);
           router.replace('/login/signIn');
         } else {
-          // If we have localData but Firebase is "thinking", stay logged in
           setUserLoggedIn(true);
         }
         setLoading(false);
@@ -64,7 +58,6 @@ export default function TabLayout() {
     );
   }
 
-  // If not logged in, this stops the Tab UI from rendering while we redirect
   if (!userLoggedIn) return null;
 
   return (

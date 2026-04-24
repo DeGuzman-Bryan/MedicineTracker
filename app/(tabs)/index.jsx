@@ -1,12 +1,5 @@
-import NetInfo from '@react-native-community/netinfo';
-import {
-  collection,
-  disableNetwork,
-  enableNetwork,
-  onSnapshot,
-  query,
-  where
-} from 'firebase/firestore';
+import { useRouter } from 'expo-router';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Header from '../../components/Header';
@@ -17,63 +10,50 @@ import { getLocalStorage } from '../../service/Storage';
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isConnected, setIsConnected] = useState(true);
   const [medList, setMedList] = useState([]);
+  const router = useRouter();
 
   useEffect(() => {
-    // 1. Network Listener: Forces Firestore to sync immediately when online
-    const unsubscribeNet = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected);
-      
-      if (state.isConnected) {
-        // Wake up Firebase network pipe to push offline changes
-        enableNetwork(db).catch((err) => console.error("Enable Network Error:", err));
-      } else {
-        // Tell Firebase we are intentionally offline to save battery/resources
-        disableNetwork(db).catch((err) => console.error("Disable Network Error:", err));
-      }
-    });
+    let unsubscribeDocs;
 
     const initializeData = async () => {
       try {
         const user = await getLocalStorage('userDetails');
         
-        if (user && user.email) {
-          const q = query(
-            collection(db, 'Medication'), 
-            where('userEmail', '==', user.email)
-          );
-          
-          // 2. onSnapshot: including metadata changes to track "Syncing" status
-          const unsubscribeDocs = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
-            const meds = [];
-            snapshot.forEach((doc) => {
-              meds.push({ id: doc.id, ...doc.data() });
-            });
-            
-            setMedList(meds);
-            
-            // metadata.hasPendingWrites is TRUE if data is only local and waiting to upload
-            setIsSyncing(snapshot.metadata.hasPendingWrites);
-            setLoading(false);
-          });
-
-          return unsubscribeDocs;
-        } else {
+        // If no user email exists, cancel guest logic and go straight to login
+        if (!user || !user.email) {
           setLoading(false);
+          router.replace('/login'); 
+          return;
         }
+
+        const q = query(
+          collection(db, 'medication'), 
+          where('userEmail', '==', user.email)
+        );
+        
+        // Cleaned up listener without the manual offline toggling
+        unsubscribeDocs = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+          const meds = [];
+          snapshot.forEach((doc) => {
+            meds.push({ id: doc.id, ...doc.data() });
+          });
+          
+          setMedList(meds);
+          setIsSyncing(snapshot.metadata.hasPendingWrites);
+          setLoading(false);
+        });
+
       } catch (error) {
         console.error("Initialization Error:", error);
         setLoading(false);
       }
     };
 
-    const unsubPromise = initializeData();
+    initializeData();
 
-    // Clean up listeners when user leaves the screen
     return () => {
-      unsubscribeNet();
-      unsubPromise.then((unsub) => unsub && unsub());
+      if (unsubscribeDocs) unsubscribeDocs();
     };
   }, []); 
 
@@ -83,14 +63,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      {/* Offline Banner: Shows when Wi-Fi/Data is totally off */}
-      {!isConnected && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>No Internet Connection - Changes saved locally</Text>
-        </View>
-      )}
-
-      {/* Syncing Indicator: Shows when Firestore is uploading background data */}
       {isSyncing && (
         <View style={styles.syncBanner}>
           <ActivityIndicator size="small" color="#4f46e5" />
@@ -109,18 +81,6 @@ const styles = StyleSheet.create({
     padding: 25, 
     backgroundColor: '#f3f1ff', 
     flex: 1 
-  },
-  offlineBanner: { 
-    backgroundColor: '#ef4444', 
-    padding: 8, 
-    borderRadius: 8, 
-    marginBottom: 10, 
-    alignItems: 'center' 
-  },
-  offlineText: { 
-    color: 'white', 
-    fontSize: 12, 
-    fontWeight: 'bold' 
   },
   syncBanner: { 
     flexDirection: 'row', 

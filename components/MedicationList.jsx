@@ -80,9 +80,9 @@ export default function MedicationList() {
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
       
-      // FIX 1: Changed 'medication' to 'Medication' to match your Add form
+      // FIX 1: Explicitly using lowercase 'medication' collection
       const q = query(
-        collection(db, 'Medication'), 
+        collection(db, 'medication'), 
         where('userEmail', '==', targetEmail),
         where('dates', 'array-contains', formattedDate)
       );
@@ -102,8 +102,8 @@ export default function MedicationList() {
             const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
             if (now.diff(scheduledTime, 'minutes') >= 60) {
               const missedAction = { date: formattedDate, status: 'Missed', time: medTime };
-              // FIX 2: Changed 'medication' to 'Medication' here as well
-              await updateDoc(doc(db, 'Medication', medId), { action: arrayUnion(missedAction) });
+              // FIX 2: Explicitly using lowercase 'medication' collection here too
+              await updateDoc(doc(db, 'medication', medId), { action: arrayUnion(missedAction) });
               if (!data.action) data.action = [];
               data.action.push(missedAction);
             }
