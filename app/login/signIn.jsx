@@ -1,4 +1,3 @@
-
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect, useState } from 'react';
@@ -87,7 +86,6 @@ export default function SignIn() {
           <Text style={styles.buttonText}>Login</Text>
         </TouchableOpacity>
 
-        {/* Updated bottom text link */}
         <View style={styles.textLinkContainer}>
           <Text style={styles.textLink}>
             Don’t have an account?{' '}

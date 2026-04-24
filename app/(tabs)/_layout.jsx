@@ -1,14 +1,13 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { auth, db } from '../../config/FirebaseConfig';
+import { auth } from '../../config/FirebaseConfig';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -16,49 +15,42 @@ export default function TabLayout() {
   const [userLoggedIn, setUserLoggedIn] = useState(false);
 
   useEffect(() => {
+    // 1. Check local storage IMMEDIATELY on app start
+    const checkLocalSession = async () => {
+      try {
+        const localData = await AsyncStorage.getItem('userDetails');
+        if (localData) {
+          const parsedData = JSON.parse(localData);
+          if (parsedData) {
+            setUserLoggedIn(true);
+            // We don't stop loading yet; we wait for Firebase to confirm the auth state
+          }
+        }
+      } catch (e) {
+        console.error("Local session check error:", e);
+      }
+    };
+
+    checkLocalSession();
+
+    // 2. Listen for Firebase Auth changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        console.log("LOG ✅ Active Session:", user.email);
-        
-        try {
-          // 1. Check local storage FIRST for immediate offline access
-          const localData = await AsyncStorage.getItem('userDetails');
-          if (localData) {
-            const parsedData = JSON.parse(localData);
-            if (parsedData.role) {
-              setUserLoggedIn(true);
-              setLoading(false); // Stop loading immediately because we have local data!
-            }
-          }
-
-          // 2. Sync with Firestore in the background
-          const userRef = doc(db, 'users', user.uid);
-          const userSnap = await getDoc(userRef); 
-          
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            await AsyncStorage.setItem('userDetails', JSON.stringify(userData));
-
-            if (!userData.role) {
-              router.replace('/login/roleSelection');
-            } else {
-              setUserLoggedIn(true);
-            }
-          } else if (!localData) {
-            // No local data AND no firestore data
-            router.replace('/login/roleSelection');
-          }
-        } catch (error) {
-          console.error("Sync error:", error);
-          // If error occurs (like timeout), but we have localData, we already set userLoggedIn to true
-        }
+        // Firebase confirms we have a session
+        setUserLoggedIn(true);
+        setLoading(false);
       } else {
-        console.log("LOG 🚪 User logged out");
-        setUserLoggedIn(false);
-        await AsyncStorage.removeItem('userDetails'); 
-        router.replace('/login/signIn');
+        // Double check local storage before kicking them out
+        const localData = await AsyncStorage.getItem('userDetails');
+        if (!localData) {
+          setUserLoggedIn(false);
+          router.replace('/login/signIn');
+        } else {
+          // If we have localData but Firebase is "thinking", stay logged in
+          setUserLoggedIn(true);
+        }
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -72,13 +64,14 @@ export default function TabLayout() {
     );
   }
 
-  // If we aren't logged in or are being redirected, show nothing (loading state handles the rest)
+  // If not logged in, this stops the Tab UI from rendering while we redirect
   if (!userLoggedIn) return null;
 
   return (
     <View style={{ flex: 1 }}>
       <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#8b5cf6' }}>
         <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome name="home" size={24} color={color} /> }} />
+        
         <Tabs.Screen 
           name="add-new-medication/index" 
           options={{

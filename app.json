@@ -60,8 +60,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7566311b-dfd5-4046-b1f7-500b576ef0f2"
+        "projectId": "695edce4-95c3-4056-a5d5-27408c9a6dac"
       }
-    }
+    },
+    "owner": "bryanbon"
   }
 }

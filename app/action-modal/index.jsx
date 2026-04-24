@@ -1,10 +1,11 @@
 import AntDesign from '@expo/vector-icons/AntDesign';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import NetInfo from '@react-native-community/netinfo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 
 export default function Index() {
@@ -12,15 +13,19 @@ export default function Index() {
   const { selectedDate, reminder, docId } = medicine;
   const router = useRouter();
 
+  // Optimized Delete: Works instantly offline
   const onDeletePress = () => {
     Alert.alert('Delete Medication', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      { text: 'Delete', style: 'destructive', onPress: () => {
           try {
-            // FIX 1: Changed 'medication' to 'Medication'
-            await deleteDoc(doc(db, 'Medication', docId));
+            // No 'await' here so it happens locally immediately
+            deleteDoc(doc(db, 'Medication', docId)).catch(() => {});
+            ToastAndroid.show("Deleted successfully", ToastAndroid.SHORT);
             router.replace('(tabs)'); 
-          } catch (e) { Alert.alert('Error', 'Could not delete.'); }
+          } catch (e) { 
+            Alert.alert('Error', 'Could not delete.'); 
+          }
       }},
     ]);
   };
@@ -35,28 +40,28 @@ export default function Index() {
     });
   };
 
-  // Good practice: save as a real Date or Timestamp
-  const action = {
-    status: 'Taken',
-    date: new Date(), // Firestore will convert this to a Timestamp object
-  };
-
+  // Optimized Status Update: Works instantly offline
   const UpdateActionStatus = async (status) => {
     try {
-      // Create a clean object with a string date or a JS Date object
-      // Avoid passing the raw 'medicine' params directly into the database
       const actionData = { 
         status, 
         time: moment().format('LT'), 
-        // Ensure date is a simple string to avoid the Object error
         date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
       };
 
-      // FIX 2: Changed 'medication' to 'Medication'
-      await updateDoc(doc(db, 'Medication', docId), {
-        action: arrayUnion(actionData),
-      });
-      
+      const docRef = doc(db, 'Medication', docId);
+
+      // We trigger the update without 'await'. 
+      // Firestore saves this to the phone's disk and notifies the Home Screen.
+      updateDoc(docRef, { action: arrayUnion(actionData) })
+        .then(() => console.log("Action queued for sync"))
+        .catch((e) => console.log("Local save only:", e));
+
+      const state = await NetInfo.fetch();
+      if (!state.isConnected) {
+        ToastAndroid.show("Saved offline! Will sync later.", ToastAndroid.SHORT);
+      }
+
       router.replace('(tabs)');
     } catch (e) { 
       console.error(e);
@@ -64,23 +69,16 @@ export default function Index() {
     }
   };
 
-  // --- THE FIX FOR THE TIMESTAMP STRING ---
   const formatReminderTime = (reminderStr) => {
     if (!reminderStr) return 'No time set';
-    
-    // Check if it's the raw Firestore string: "Timestamp(seconds=1769466840, nanoseconds=0)"
     const match = reminderStr.match(/seconds=(\d+)/);
     if (match) {
       const seconds = parseInt(match[1]);
       const date = new Date(seconds * 1000);
       return date.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
+        hour: '2-digit', minute: '2-digit', hour12: true,
       });
     }
-    
-    // If it's already a normal string (like "10:30 AM"), return it as is
     return reminderStr;
   };
 
@@ -92,10 +90,7 @@ export default function Index() {
       />
       
       <Text style={styles.dateText}>{selectedDate}</Text>
-      
-      {/* USE THE NEW FORMATTING FUNCTION HERE */}
       <Text style={styles.reminderText}>{formatReminderTime(reminder)}</Text>
-      
       <Text style={styles.subText}>It's time to take</Text>
 
       <View style={styles.buttonRow}>

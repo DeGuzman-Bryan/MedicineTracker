@@ -1,21 +1,42 @@
-import { collection, query, where, onSnapshot } from 'firebase/firestore'; // Added missing imports
+import NetInfo from '@react-native-community/netinfo';
+import {
+  collection,
+  disableNetwork,
+  enableNetwork,
+  onSnapshot,
+  query,
+  where
+} from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 import { db } from '../../config/FirebaseConfig';
-import { getLocalStorage } from '../../service/Storage'; // Ensure this is imported
+import { getLocalStorage } from '../../service/Storage';
 
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
   const [medList, setMedList] = useState([]);
 
   useEffect(() => {
-    // 1. Create an async function inside useEffect
+    // 1. Network Listener: Forces Firestore to sync immediately when online
+    const unsubscribeNet = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
+      
+      if (state.isConnected) {
+        // Wake up Firebase network pipe to push offline changes
+        enableNetwork(db).catch((err) => console.error("Enable Network Error:", err));
+      } else {
+        // Tell Firebase we are intentionally offline to save battery/resources
+        disableNetwork(db).catch((err) => console.error("Disable Network Error:", err));
+      }
+    });
+
     const initializeData = async () => {
       try {
-        const user = await getLocalStorage('userDetails'); // Added 'await' and key
+        const user = await getLocalStorage('userDetails');
         
         if (user && user.email) {
           const q = query(
@@ -23,31 +44,35 @@ export default function HomeScreen() {
             where('userEmail', '==', user.email)
           );
           
-          const unsubscribe = onSnapshot(q, (snapshot) => {
+          // 2. onSnapshot: including metadata changes to track "Syncing" status
+          const unsubscribeDocs = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
             const meds = [];
             snapshot.forEach((doc) => {
               meds.push({ id: doc.id, ...doc.data() });
             });
             
             setMedList(meds);
+            
+            // metadata.hasPendingWrites is TRUE if data is only local and waiting to upload
             setIsSyncing(snapshot.metadata.hasPendingWrites);
-            setLoading(false); // Data loaded (either from cache or server)
+            setLoading(false);
           });
 
-          return unsubscribe;
+          return unsubscribeDocs;
         } else {
           setLoading(false);
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Initialization Error:", error);
         setLoading(false);
       }
     };
 
     const unsubPromise = initializeData();
 
-    // Clean up the listener
+    // Clean up listeners when user leaves the screen
     return () => {
+      unsubscribeNet();
       unsubPromise.then((unsub) => unsub && unsub());
     };
   }, []); 
@@ -57,32 +82,61 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={{
-      padding: 25,
-      backgroundColor: '#f3f1ff',
-      flex: 1, // Use flex: 1 instead of height: '100%' for better layout
-    }}>
-      {/* Sync Indicator */}
+    <View style={styles.mainContainer}>
+      {/* Offline Banner: Shows when Wi-Fi/Data is totally off */}
+      {!isConnected && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineText}>No Internet Connection - Changes saved locally</Text>
+        </View>
+      )}
+
+      {/* Syncing Indicator: Shows when Firestore is uploading background data */}
       {isSyncing && (
-        <View style={{ 
-          flexDirection: 'row', 
-          justifyContent: 'center', 
-          padding: 5, 
-          backgroundColor: '#e0e7ff', // Light indigo to match your theme
-          borderRadius: 10,
-          marginBottom: 10 
-        }}>
+        <View style={styles.syncBanner}>
           <ActivityIndicator size="small" color="#4f46e5" />
-          <Text style={{ marginLeft: 5, fontSize: 12, color: '#4f46e5' }}>Syncing with cloud...</Text>
+          <Text style={styles.syncText}>Syncing changes to cloud...</Text>
         </View>
       )}
 
       <Header />
-
-      {/* IMPORTANT: Pass medList to your MedicationList component 
-        so it actually displays the synced data! 
-      */}
       <MedicationList medList={medList} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  mainContainer: { 
+    padding: 25, 
+    backgroundColor: '#f3f1ff', 
+    flex: 1 
+  },
+  offlineBanner: { 
+    backgroundColor: '#ef4444', 
+    padding: 8, 
+    borderRadius: 8, 
+    marginBottom: 10, 
+    alignItems: 'center' 
+  },
+  offlineText: { 
+    color: 'white', 
+    fontSize: 12, 
+    fontWeight: 'bold' 
+  },
+  syncBanner: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    padding: 10, 
+    backgroundColor: '#e0e7ff', 
+    borderRadius: 10, 
+    marginBottom: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#c7d2fe'
+  },
+  syncText: { 
+    marginLeft: 10, 
+    fontSize: 13, 
+    color: '#4f46e5', 
+    fontWeight: '600' 
+  }
+});

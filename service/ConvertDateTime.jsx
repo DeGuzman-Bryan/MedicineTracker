@@ -1,6 +1,5 @@
 import moment from "moment";
 
-// CHANGE: Return a formatted string, not the Date object itself
 export const FormatDate = (Timestamp) => {
     return moment(Timestamp).format('MM/DD/YYYY');
 }
@@ -20,7 +19,6 @@ export const formatTime = (Timestamp) => {
 }
 
 export const getDatesRange = (startDate, endDate) => {
-    // Force moment to recognize the specific format we use
     const start = moment(startDate, 'MM/DD/YYYY');
     const end = moment(endDate, 'MM/DD/YYYY');
     const dates = [];
