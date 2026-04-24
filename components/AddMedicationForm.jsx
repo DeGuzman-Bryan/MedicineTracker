@@ -83,18 +83,14 @@ export default function AddMedicationForm() {
       const docRef = doc(db, 'medication', docId);
       const myEmail = user?.email;
       
-      // Use a Set to avoid duplicate emails
       const accessSet = new Set();
       accessSet.add(myEmail);
 
-      // 1. Check local storage for any known partner email
       const localPartner = user?.linkedPatientEmail || user?.linkedCaregiverEmail || user?.patientEmail || user?.caregiverEmail || user?.linkedEmail;
       if (localPartner) accessSet.add(localPartner);
 
-      // 🌟 DEEP SYNC FIX: Search the database to find the Caregiver 🌟
       try {
           const usersRef = collection(db, 'users');
-          // Look for any user that has ME listed as their patient
           const q = query(usersRef, where('patientEmail', '==', myEmail));
           const querySnapshot = await getDocs(q);
           
@@ -108,13 +104,12 @@ export default function AddMedicationForm() {
           console.log("Deep Lookup Error:", e);
       }
 
-      // Convert Set back to Array for Firebase
       const accessArray = Array.from(accessSet).filter(Boolean);
 
       const dataToSave = {
         ...formData,
         userEmail: myEmail || 'guest',
-        accessibleBy: accessArray, // This now contains BOTH the patient and caregiver
+        accessibleBy: accessArray, 
         docId,
         startDate: effectiveStart,
         dates: datesArray,
@@ -134,6 +129,7 @@ export default function AddMedicationForm() {
       const permissionGranted = await requestPermissions(); 
       if (permissionGranted) {
           const triggerDate = new Date();
+          
           if (formData.reminderDateObj) {
               triggerDate.setHours(formData.reminderDateObj.getHours(), formData.reminderDateObj.getMinutes(), 0, 0);
           } else {
@@ -142,17 +138,26 @@ export default function AddMedicationForm() {
               let [hours, minutes] = time.split(':');
               hours = parseInt(hours, 10);
               minutes = parseInt(minutes, 10);
-              if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
-              if (modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
+              
+              if (modifier) {
+                if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
+                if (modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
+              }
               triggerDate.setHours(hours, minutes, 0, 0);
           }
+
           if (triggerDate <= new Date()) {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
+
+          // 🌟 THE FIX: Passing explicit hour and minute to avoid timezone issues 🌟
           await scheduleMedicationNotification(
               formData.name,
               `Dose: ${formData.dose || 'Take your medicine'}`,
-              triggerDate 
+              {
+                  hour: triggerDate.getHours(),
+                  minute: triggerDate.getMinutes()
+              }
           );
       }
 

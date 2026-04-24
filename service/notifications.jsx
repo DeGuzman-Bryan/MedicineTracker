@@ -19,7 +19,6 @@ export const requestPermissions = async () => {
     finalStatus = status;
   }
 
-  // --- CRITICAL FIX: Explicitly create the channel for Android Dev Builds ---
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: 'default',
@@ -32,12 +31,11 @@ export const requestPermissions = async () => {
   return finalStatus === "granted";
 };
 
-/**
- * Schedules a daily notification for real medications
- */
-export const scheduleMedicationNotification = async (title, body, date) => {
-  const triggerTime = new Date(date);
+export const scheduleMedicationNotification = async (title, body, timeObj) => {
+  // Wipe out old ghosts so they don't fire immediately
+  await Notifications.cancelAllScheduledNotificationsAsync();
 
+  // Schedule using strict wall-clock time, explicit type, and channelId
   const identifier = await Notifications.scheduleNotificationAsync({
     content: {
       title: `💊 Time for ${title}`,
@@ -45,11 +43,12 @@ export const scheduleMedicationNotification = async (title, body, date) => {
       sound: true,
     },
     trigger: {
-      hour: triggerTime.getHours(),
-      minute: triggerTime.getMinutes(),
-      repeats: true,
-      channelId: 'default', // Link to the channel we created above
-    },
+      type: Notifications.SchedulableTriggerInputTypes.DAILY, // 🌟 THIS PREVENTS IT FROM FIRING INSTANTLY
+      channelId: 'default', // Satisfies Android's strict background rules
+      hour: timeObj.hour,
+      minute: timeObj.minute,
+      repeats: true, 
+    }, 
   });
 
   return identifier;
