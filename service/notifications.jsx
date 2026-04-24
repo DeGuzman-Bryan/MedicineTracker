@@ -43,8 +43,8 @@ export const scheduleMedicationNotification = async (title, body, timeObj) => {
       sound: true,
     },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY, // 🌟 THIS PREVENTS IT FROM FIRING INSTANTLY
-      channelId: 'default', // Satisfies Android's strict background rules
+      type: Notifications.SchedulableTriggerInputTypes.DAILY, 
+      channelId: 'default', 
       hour: timeObj.hour,
       minute: timeObj.minute,
       repeats: true, 
@@ -52,4 +52,16 @@ export const scheduleMedicationNotification = async (title, body, timeObj) => {
   });
 
   return identifier;
+};
+
+// 🌟 NEW: Fires a notification instantly (Used for Login & Auto-Miss) 🌟
+export const sendImmediateNotification = async (title, body) => {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: title,
+      body: body,
+      sound: true,
+    },
+    trigger: null, // null means "fire immediately right now"
+  });
 };

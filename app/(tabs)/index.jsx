@@ -7,13 +7,15 @@ import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 import { db } from '../../config/FirebaseConfig';
 import { getLocalStorage } from '../../service/Storage';
+// 🌟 Import the new immediate notification function
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendImmediateNotification } from '../../service/notifications';
 
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [medList, setMedList] = useState([]);
   const router = useRouter();
 
-  // Helper to parse the weird "seconds=..." string or standard time strings
   const parseTime = (reminderStr) => {
     if (!reminderStr) return null;
     const match = reminderStr.match(/seconds=(\d+)/);
@@ -25,23 +27,24 @@ export default function HomeScreen() {
   };
 
   const checkAndMarkMissedMedications = async (fetchedMedications) => {
-    const today = moment().format('ll'); // Matches your ActionModal date format
+    const today = moment().format('ll'); 
     const currentTime = moment();
 
     for (const med of fetchedMedications) {
       const reminderTime = parseTime(med.reminder);
       if (!reminderTime) continue;
 
-      // Set the reminder time to TODAY'S date for comparison
       const todayReminder = moment().set({
         hour: reminderTime.hour(),
         minute: reminderTime.minute(),
         second: 0
       });
 
-      // 1. Check if time has passed
-      if (currentTime.isAfter(todayReminder)) {
-        // 2. Check if there is already an entry for today in the 'action' array
+      // 🌟 ADD 1 HOUR DELAY THRESHOLD
+      const missedThreshold = moment(todayReminder).add(1, 'hours');
+
+      // 1. Check if the current time is strictly past the 1-hour grace period
+      if (currentTime.isAfter(missedThreshold)) {
         const hasEntryForToday = med.action?.some(entry => entry.date === today);
 
         if (!hasEntryForToday) {
@@ -49,7 +52,6 @@ export default function HomeScreen() {
             console.log(`Marking ${med.name} as missed for ${today}`);
             const medRef = doc(db, 'medication', med.id);
             
-            // Push the missed status into the action array just like ActionModal does
             await updateDoc(medRef, {
               action: arrayUnion({
                 status: 'Missed',
@@ -57,6 +59,13 @@ export default function HomeScreen() {
                 date: today
               })
             });
+
+            // 🌟 FIRE IMMEDIATE NOTIFICATION THAT THEY MISSED IT
+            await sendImmediateNotification(
+              "🚨 Medication Missed",
+              `You missed your scheduled dose of ${med.name}. Please check your tracker.`
+            );
+
           } catch (error) {
             console.error("Auto-miss update error:", error);
           }
@@ -80,6 +89,14 @@ export default function HomeScreen() {
         return; 
       }
 
+      // 🌟 LOGIN NOTIFICATION LOGIC (Only fires once per day so it isn't annoying)
+      const todayStr = moment().format('YYYY-MM-DD');
+      const lastLoginNotif = await AsyncStorage.getItem('lastLoginNotif');
+      if (lastLoginNotif !== todayStr) {
+        await sendImmediateNotification("Welcome Back! 👋", "We're keeping track of your schedule today.");
+        await AsyncStorage.setItem('lastLoginNotif', todayStr);
+      }
+
       const q = query(
         collection(db, 'medication'), 
         where('accessibleBy', 'array-contains', user.email)
@@ -88,7 +105,6 @@ export default function HomeScreen() {
       unsubscribe = onSnapshot(q, (snapshot) => {
         const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // This triggers the check every time the data syncs
         checkAndMarkMissedMedications(meds);
 
         setMedList(meds);
