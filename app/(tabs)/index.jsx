@@ -20,11 +20,11 @@ export default function HomeScreen() {
       try {
         const user = await getLocalStorage('userDetails');
         
-        // If no user email exists, cancel guest logic and go straight to login
+        // CRITICAL FIX: If no user, redirect immediately and DON'T set loading to false.
+        // This prevents the "No user logged in" header from flashing.
         if (!user || !user.email) {
-          setLoading(false);
           router.replace('/login'); 
-          return;
+          return; 
         }
 
         const q = query(
@@ -32,7 +32,6 @@ export default function HomeScreen() {
           where('userEmail', '==', user.email)
         );
         
-        // Cleaned up listener without the manual offline toggling
         unsubscribeDocs = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
           const meds = [];
           snapshot.forEach((doc) => {
@@ -46,7 +45,8 @@ export default function HomeScreen() {
 
       } catch (error) {
         console.error("Initialization Error:", error);
-        setLoading(false);
+        // If there is an error, it's safer to redirect to login
+        router.replace('/login');
       }
     };
 
@@ -57,8 +57,13 @@ export default function HomeScreen() {
     };
   }, []); 
 
+  // Full-screen loading centered
   if (loading) {
-    return <ActivityIndicator size={'large'} color={'#8b5cf6'} style={{marginTop: '50%'}} />;
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size={'large'} color={'#8b5cf6'} />
+      </View>
+    );
   }
 
   return (
@@ -81,6 +86,12 @@ const styles = StyleSheet.create({
     padding: 25, 
     backgroundColor: '#f3f1ff', 
     flex: 1 
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f1ff'
   },
   syncBanner: { 
     flexDirection: 'row', 
