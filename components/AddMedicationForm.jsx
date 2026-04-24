@@ -12,7 +12,7 @@ import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpac
 import { db } from '../config/FirebaseConfig';
 import { TypeList, WhenToTake } from '../Constant/Options';
 import { FormatDate, getDatesRange } from '../service/ConvertDateTime';
-import { scheduleMedicationNotification, requestPermissions } from '../service/notifications';
+import { requestPermissions, scheduleMedicationNotification } from '../service/notifications';
 
 export default function AddMedicationForm() {
   const params = useLocalSearchParams();
@@ -56,7 +56,7 @@ export default function AddMedicationForm() {
     return m.isValid() ? m.toDate() : new Date();
   };
 
-const SaveMedication = async () => {
+  const SaveMedication = async () => {
     const isEditing = !!params?.docId;
     const docId = isEditing ? params.docId : Date.now().toString();
     
@@ -126,7 +126,6 @@ const SaveMedication = async () => {
       }
 
       // 6. Navigate Home Immediately
-      // Instead of an Alert.alert with a button, we go back now so it feels instant
       router.replace('(tabs)');
 
     } catch (e) { 
@@ -136,7 +135,11 @@ const SaveMedication = async () => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 50 }}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={{ paddingBottom: 150 }} 
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Medicine Name (REQUIRED) */}
       <View style={styles.inputGroup}>
         <Ionicons name="medkit-outline" size={22} color="#8b5cf6" />
@@ -269,6 +272,7 @@ const SaveMedication = async () => {
   );
 }
 
+// EXACTLY AS IT WAS ORIGINALLY
 const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: '#F9FAFB' },
   label: { fontSize: 14, fontWeight: '600', marginTop: 15, marginBottom: 5, color: '#555' },

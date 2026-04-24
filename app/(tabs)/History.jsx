@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // 1. Swap useFocusEffect for useEffect
-import { collection, deleteDoc, doc, query, where, onSnapshot } from 'firebase/firestore'; 
+import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -15,7 +15,7 @@ export default function MedicationHistory() {
   const [selectedMed, setSelectedMed] = useState(null);
   
   // 2. Use useEffect with a Map to prevent duplicate key errors
-useEffect(() => {
+  useEffect(() => {
     let unsubscribe;
 
     const setupQuery = async () => {
@@ -24,8 +24,9 @@ useEffect(() => {
         const user = value ? JSON.parse(value) : null;
         if (!user?.email) return;
 
+        // FIX 1: Changed 'medication' to 'Medication'
         const q = query(
-          collection(db, 'medication'), 
+          collection(db, 'Medication'), 
           where('userEmail', '==', user.email)
         );
 
@@ -94,9 +95,9 @@ useEffect(() => {
       { text: "Cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
           try {
-            await deleteDoc(doc(db, 'medication', selectedMed.id));
+            // FIX 2: Changed 'medication' to 'Medication' so delete actually works
+            await deleteDoc(doc(db, 'Medication', selectedMed.id));
             setModalVisible(false);
-            // No need to call loadAllMedications manually!
           } catch (e) {
             console.error("Delete error:", e);
           }

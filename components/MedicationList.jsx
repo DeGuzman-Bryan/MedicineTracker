@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications'; // Added Expo Notifications
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
@@ -80,8 +80,9 @@ export default function MedicationList() {
 
       const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
       
+      // FIX 1: Changed 'medication' to 'Medication' to match your Add form
       const q = query(
-        collection(db, 'medication'),
+        collection(db, 'Medication'), 
         where('userEmail', '==', targetEmail),
         where('dates', 'array-contains', formattedDate)
       );
@@ -101,7 +102,8 @@ export default function MedicationList() {
             const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
             if (now.diff(scheduledTime, 'minutes') >= 60) {
               const missedAction = { date: formattedDate, status: 'Missed', time: medTime };
-              await updateDoc(doc(db, 'medication', medId), { action: arrayUnion(missedAction) });
+              // FIX 2: Changed 'medication' to 'Medication' here as well
+              await updateDoc(doc(db, 'Medication', medId), { action: arrayUnion(missedAction) });
               if (!data.action) data.action = [];
               data.action.push(missedAction);
             }

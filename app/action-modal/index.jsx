@@ -17,7 +17,8 @@ export default function Index() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            await deleteDoc(doc(db, 'medication', docId));
+            // FIX 1: Changed 'medication' to 'Medication'
+            await deleteDoc(doc(db, 'Medication', docId));
             router.replace('(tabs)'); 
           } catch (e) { Alert.alert('Error', 'Could not delete.'); }
       }},
@@ -35,10 +36,10 @@ export default function Index() {
   };
 
   // Good practice: save as a real Date or Timestamp
-const action = {
-  status: 'Taken',
-  date: new Date(), // Firestore will convert this to a Timestamp object
-};
+  const action = {
+    status: 'Taken',
+    date: new Date(), // Firestore will convert this to a Timestamp object
+  };
 
   const UpdateActionStatus = async (status) => {
     try {
@@ -51,7 +52,8 @@ const action = {
         date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
       };
 
-      await updateDoc(doc(db, 'medication', docId), {
+      // FIX 2: Changed 'medication' to 'Medication'
+      await updateDoc(doc(db, 'Medication', docId), {
         action: arrayUnion(actionData),
       });
       
