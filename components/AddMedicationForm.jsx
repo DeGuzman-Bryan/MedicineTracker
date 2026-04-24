@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useState } from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -81,22 +81,40 @@ export default function AddMedicationForm() {
 
     try {
       const docRef = doc(db, 'medication', docId);
-      
-      // 🌟 THE FIX: Grab absolutely every variation of the partner's email from the database
       const myEmail = user?.email;
-      const partnerEmail = 
-        user?.linkedPatientEmail || 
-        user?.linkedCaregiverEmail || 
-        user?.patientEmail || 
-        user?.caregiverEmail || 
-        user?.linkedEmail;
+      
+      // Use a Set to avoid duplicate emails
+      const accessSet = new Set();
+      accessSet.add(myEmail);
 
-      const accessArray = [myEmail, partnerEmail].filter(Boolean);
+      // 1. Check local storage for any known partner email
+      const localPartner = user?.linkedPatientEmail || user?.linkedCaregiverEmail || user?.patientEmail || user?.caregiverEmail || user?.linkedEmail;
+      if (localPartner) accessSet.add(localPartner);
+
+      // 🌟 DEEP SYNC FIX: Search the database to find the Caregiver 🌟
+      try {
+          const usersRef = collection(db, 'users');
+          // Look for any user that has ME listed as their patient
+          const q = query(usersRef, where('patientEmail', '==', myEmail));
+          const querySnapshot = await getDocs(q);
+          
+          querySnapshot.forEach((docSnap) => {
+              const caregiverData = docSnap.data();
+              if (caregiverData.email) {
+                  accessSet.add(caregiverData.email);
+              }
+          });
+      } catch (e) {
+          console.log("Deep Lookup Error:", e);
+      }
+
+      // Convert Set back to Array for Firebase
+      const accessArray = Array.from(accessSet).filter(Boolean);
 
       const dataToSave = {
         ...formData,
         userEmail: myEmail || 'guest',
-        accessibleBy: accessArray, 
+        accessibleBy: accessArray, // This now contains BOTH the patient and caregiver
         docId,
         startDate: effectiveStart,
         dates: datesArray,
@@ -114,30 +132,23 @@ export default function AddMedicationForm() {
       }
 
       const permissionGranted = await requestPermissions(); 
-      
       if (permissionGranted) {
           const triggerDate = new Date();
-
           if (formData.reminderDateObj) {
               triggerDate.setHours(formData.reminderDateObj.getHours(), formData.reminderDateObj.getMinutes(), 0, 0);
           } else {
               const cleanTimeStr = formData.reminder.replace(/[\u202F\u00A0]/g, ' ').trim();
               const [time, modifier] = cleanTimeStr.split(' '); 
               let [hours, minutes] = time.split(':');
-
               hours = parseInt(hours, 10);
               minutes = parseInt(minutes, 10);
-
               if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
               if (modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
-
               triggerDate.setHours(hours, minutes, 0, 0);
           }
-
           if (triggerDate <= new Date()) {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
-
           await scheduleMedicationNotification(
               formData.name,
               `Dose: ${formData.dose || 'Take your medicine'}`,

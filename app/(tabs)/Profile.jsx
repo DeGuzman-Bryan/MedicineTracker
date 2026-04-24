@@ -25,7 +25,6 @@ export default function Profile() {
     setUserData(user);
   };
 
-  // --- FIXED TEST NOTIFICATION ---
   const sendTestNotification = async () => {
     const hasPermission = await requestPermissions();
     
@@ -44,7 +43,7 @@ export default function Profile() {
         },
         trigger: {
           seconds: 5,
-          channelId: 'default', // FIX: Satisfies the Dev Build requirement
+          channelId: 'default', 
         },
       });
 
@@ -74,6 +73,12 @@ export default function Profile() {
         linkedPatientId: patientId.trim(),
         linkedPatientEmail: patientData.email,
         linkedPatientName: patientData.fullName
+      });
+
+      await updateDoc(doc(db, 'users', patientId.trim()), {
+        linkedCaregiverId: auth.currentUser.uid,
+        linkedCaregiverEmail: userData.email, 
+        linkedCaregiverName: userData.fullName 
       });
 
       const updatedUser = { 
@@ -121,7 +126,7 @@ export default function Profile() {
             <Text style={styles.roleText}>{userData.role?.toUpperCase()}</Text>
           </View>
 
-          {/* CAREGIVER SECTION: Paste Patient Code */}
+          {/* CAREGIVER SECTION */}
           {userData.role === 'caregiver' && (
             <View style={styles.connectSection}>
               <Text style={styles.idLabel}>Connect to Patient:</Text>
@@ -151,12 +156,12 @@ export default function Profile() {
             </View>
           )}
 
-          {/* PATIENT SECTION: Show Share Code */}
+          {/* PATIENT SECTION: Long Press to Copy */}
           {userData.role === 'patient' && (
             <View style={styles.idSection}>
-              <Text style={styles.idLabel}>Your Share Code:</Text>
+              <Text style={styles.idLabel}>Your Share Code (Long press to copy):</Text>
               <View style={styles.copyBox}>
-                <Text style={styles.idText} numberOfLines={1}>{userData.uid}</Text>
+                <Text style={styles.idText} selectable={true}>{userData.uid}</Text>
               </View>
             </View>
           )}
