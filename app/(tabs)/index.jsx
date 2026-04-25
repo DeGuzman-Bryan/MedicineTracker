@@ -1,20 +1,29 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 import { db } from '../../config/FirebaseConfig';
 import { sendImmediateNotification } from '../../service/notifications';
+import { syncOfflineQueue } from '../../service/OfflineSync';
 import { getLocalStorage } from '../../service/Storage';
 
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [medList, setMedList] = useState([]);
+  
+  // Network States for the Banner
+  const [isOffline, setIsOffline] = useState(false);
+  const [showOnlineMsg, setShowOnlineMsg] = useState(false);
+  
   const router = useRouter();
   const currentUserEmail = useRef(null); 
+  const hasCheckedMissed = useRef(false); // Fixes the notification spam!
+  const wasOffline = useRef(false); // Remembers if they were disconnected
 
   const parseTime = (reminderStr) => {
     if (!reminderStr) return null;
@@ -47,9 +56,7 @@ export default function HomeScreen() {
 
         if (!hasEntryForToday) {
           try {
-            console.log(`Marking ${med.name} as missed for ${today}`);
             const medRef = doc(db, 'medication', med.id);
-            
             await updateDoc(medRef, {
               action: arrayUnion({
                 status: 'Missed',
@@ -63,7 +70,6 @@ export default function HomeScreen() {
               "🚨 Medication Missed",
               `You missed your scheduled dose of ${med.name}. Please check your tracker.`
             );
-
           } catch (error) {
             console.error("Auto-miss update error:", error);
           }
@@ -74,6 +80,32 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let unsubscribe;
+    
+    // Check immediately when the app opens
+    NetInfo.fetch().then(state => {
+      if (state.isConnected === false) {
+        setIsOffline(true);
+        wasOffline.current = true;
+      }
+    });
+
+    // Listen for network changes (Wi-Fi or Mobile Data)
+    const unsubscribeNet = NetInfo.addEventListener(state => {
+      if (state.isConnected === false) {
+        setIsOffline(true);
+        setShowOnlineMsg(false);
+        wasOffline.current = true;
+      } else {
+        setIsOffline(false);
+        if (wasOffline.current) {
+          setShowOnlineMsg(true);
+          setTimeout(() => setShowOnlineMsg(false), 4000); 
+          wasOffline.current = false;
+        }
+        syncOfflineQueue(); 
+      }
+    });
+
     const init = async () => {
       const user = await getLocalStorage('userDetails');
       
@@ -104,7 +136,6 @@ export default function HomeScreen() {
       unsubscribe = onSnapshot(q, (snapshot) => {
         const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // 🌟 REAL-TIME "BOTH SIDES" NOTIFICATION LISTENER 🌟
         snapshot.docChanges().forEach((change) => {
           if (change.type === "modified") {
             const data = change.doc.data();
@@ -125,7 +156,11 @@ export default function HomeScreen() {
           }
         });
 
-        checkAndMarkMissedMedications(meds);
+        // Ensure missed notification check only runs once
+        if (!hasCheckedMissed.current) {
+           checkAndMarkMissedMedications(meds);
+           hasCheckedMissed.current = true;
+        }
 
         setMedList(meds);
         setLoading(false);
@@ -136,13 +171,30 @@ export default function HomeScreen() {
     };
 
     init();
-    return () => unsubscribe && unsubscribe();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      unsubscribeNet(); 
+    };
   }, []);
 
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#8b5cf6"/></View>;
 
   return (
     <View style={styles.mainContainer}>
+      
+      {/* Offline / Online Banners */}
+      {isOffline && (
+        <View style={[styles.networkBanner, { backgroundColor: '#ef4444' }]}>
+          <Text style={styles.networkText}>You are currently offline</Text>
+        </View>
+      )}
+      {showOnlineMsg && (
+        <View style={[styles.networkBanner, { backgroundColor: '#22c55e' }]}>
+          <Text style={styles.networkText}>Back online! Syncing...</Text>
+        </View>
+      )}
+
       <Header />
       <MedicationList medList={medList} />
     </View>
@@ -151,5 +203,23 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   mainContainer: { padding: 25, backgroundColor: '#f3f1ff', flex: 1 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  networkBanner: {
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 30, // Pushes the banner down below the phone's status bar
+    marginBottom: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  networkText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 15,
+  }
 });

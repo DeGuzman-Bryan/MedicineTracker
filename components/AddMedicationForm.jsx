@@ -14,6 +14,10 @@ import { TypeList, WhenToTake } from '../Constant/Options';
 import { FormatDate, getDatesRange } from '../service/ConvertDateTime';
 import { requestPermissions, scheduleMedicationNotification } from '../service/notifications';
 
+// 🌟 NEW IMPORTS FOR OFFLINE SYNC
+import NetInfo from '@react-native-community/netinfo';
+import { addToOfflineQueue } from '../service/OfflineSync';
+
 const { height } = Dimensions.get('window');
 
 export default function AddMedicationForm() {
@@ -120,12 +124,7 @@ export default function AddMedicationForm() {
 
       delete dataToSave.reminderDateObj;
 
-      if (isEditing) {
-        await updateDoc(docRef, dataToSave);
-      } else {
-        await setDoc(docRef, dataToSave);
-      }
-
+      // 1. SET LOCAL DEVICE ALARM FIRST (Works without WiFi)
       const permissionGranted = await requestPermissions(); 
       if (permissionGranted) {
           const triggerDate = new Date();
@@ -150,7 +149,6 @@ export default function AddMedicationForm() {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
 
-          // 🌟 THE FIX: Passing explicit hour and minute to avoid timezone issues 🌟
           await scheduleMedicationNotification(
               formData.name,
               `Dose: ${formData.dose || 'Take your medicine'}`,
@@ -159,6 +157,26 @@ export default function AddMedicationForm() {
                   minute: triggerDate.getMinutes()
               }
           );
+      }
+
+      // 2. CHECK WIFI CONNECTION
+      const state = await NetInfo.fetch();
+      if (!state.isConnected) {
+          // No WiFi? Save it to our local offline queue!
+          const actionType = isEditing ? 'UPDATE_MED' : 'ADD';
+          await addToOfflineQueue(actionType, { docId, data: dataToSave });
+          
+          Alert.alert('Saved Offline 📡', 'Your medicine and alarm are set! It will sync to the database when WiFi returns.', [
+            { text: 'OK', onPress: () => router.replace('(tabs)') }
+          ]);
+          return; 
+      }
+
+      // 3. WIFI IS ON -> SAVE DIRECTLY TO DATABASE
+      if (isEditing) {
+        await updateDoc(docRef, dataToSave);
+      } else {
+        await setDoc(docRef, dataToSave);
       }
 
       Alert.alert('Success', isEditing ? 'Updated!' : 'Saved!', [

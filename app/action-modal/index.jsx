@@ -7,11 +7,12 @@ import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
-import { getLocalStorage } from '../../service/Storage'; // 🌟 ADDED IMPORT
+import { addToOfflineQueue } from '../../service/OfflineSync'; // 🌟 ADDED IMPORT
+import { getLocalStorage } from '../../service/Storage';
 
 export default function ActionModal() {
   const medicine = useLocalSearchParams(); 
-  const { selectedDate, reminder, docId, name } = medicine; // Added 'name' to use in text
+  const { selectedDate, reminder, docId, name } = medicine;
   const router = useRouter();
 
   const onDeletePress = () => {
@@ -24,6 +25,15 @@ export default function ActionModal() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
+            // 🌟 CHECK WIFI FIRST
+            const state = await NetInfo.fetch();
+            if (!state.isConnected) {
+               await addToOfflineQueue('DELETE', { docId });
+               ToastAndroid.show("Saved offline. Will delete when connected.", ToastAndroid.SHORT);
+               router.replace('(tabs)'); 
+               return;
+            }
+
             await deleteDoc(doc(db, 'medication', docId));
             ToastAndroid.show("Deleted successfully", ToastAndroid.SHORT);
             router.replace('(tabs)'); 
@@ -52,25 +62,26 @@ export default function ActionModal() {
     }
 
     try {
-      // 🌟 GET CURRENT USER TO KNOW WHO CLICKED IT
       const user = await getLocalStorage('userDetails');
-
       const actionData = { 
         status, 
         time: moment().format('LT'), 
         date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll'),
-        by: user?.email || 'Unknown' // 🌟 SAVE THEIR EMAIL TO THE DB
+        by: user?.email || 'Unknown' 
       };
 
-      const docRef = doc(db, 'medication', docId);
-
-      await updateDoc(docRef, { action: arrayUnion(actionData) });
-      console.log("Action updated successfully");
-
+      // 🌟 CHECK WIFI FIRST
       const state = await NetInfo.fetch();
       if (!state.isConnected) {
-        ToastAndroid.show("Saved offline! Will sync when connected.", ToastAndroid.SHORT);
+         await addToOfflineQueue('UPDATE_ACTION', { docId, actionData });
+         ToastAndroid.show(`Saved ${status} offline. Will sync when connected.`, ToastAndroid.SHORT);
+         router.replace('(tabs)');
+         return;
       }
+
+      const docRef = doc(db, 'medication', docId);
+      await updateDoc(docRef, { action: arrayUnion(actionData) });
+      ToastAndroid.show(`Marked as ${status}`, ToastAndroid.SHORT);
 
       router.replace('(tabs)');
     } catch (e) { 
