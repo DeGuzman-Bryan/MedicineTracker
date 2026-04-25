@@ -7,10 +7,11 @@ import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
+import { getLocalStorage } from '../../service/Storage'; // 🌟 ADDED IMPORT
 
 export default function ActionModal() {
   const medicine = useLocalSearchParams(); 
-  const { selectedDate, reminder, docId } = medicine;
+  const { selectedDate, reminder, docId, name } = medicine; // Added 'name' to use in text
   const router = useRouter();
 
   const onDeletePress = () => {
@@ -23,7 +24,6 @@ export default function ActionModal() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
           try {
-            // FIX 1: Changed 'Medication' to 'medication' & added 'await'
             await deleteDoc(doc(db, 'medication', docId));
             ToastAndroid.show("Deleted successfully", ToastAndroid.SHORT);
             router.replace('(tabs)'); 
@@ -52,16 +52,18 @@ export default function ActionModal() {
     }
 
     try {
+      // 🌟 GET CURRENT USER TO KNOW WHO CLICKED IT
+      const user = await getLocalStorage('userDetails');
+
       const actionData = { 
         status, 
         time: moment().format('LT'), 
-        date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
+        date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll'),
+        by: user?.email || 'Unknown' // 🌟 SAVE THEIR EMAIL TO THE DB
       };
 
-      // FIX 2: Changed 'Medication' to 'medication' to match your Firestore database
       const docRef = doc(db, 'medication', docId);
 
-      // FIX 3: Added 'await' so the component doesn't unmount while writing
       await updateDoc(docRef, { action: arrayUnion(actionData) });
       console.log("Action updated successfully");
 
@@ -99,7 +101,7 @@ export default function ActionModal() {
       
       <Text style={styles.dateText}>{selectedDate}</Text>
       <Text style={styles.reminderText}>{formatReminderTime(reminder)}</Text>
-      <Text style={styles.subText}>It's time to take</Text>
+      <Text style={styles.subText}>It's time to take {name ? name : 'your medicine'}</Text>
 
       <View style={styles.buttonRow}>
         <TouchableOpacity style={styles.missedBtn} onPress={() => UpdateActionStatus('Missed')}>

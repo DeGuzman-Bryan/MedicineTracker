@@ -1,20 +1,20 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import Header from '../../components/Header';
 import MedicationList from '../../components/MedicationList';
 import { db } from '../../config/FirebaseConfig';
-import { getLocalStorage } from '../../service/Storage';
-// 🌟 Import the new immediate notification function
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendImmediateNotification } from '../../service/notifications';
+import { getLocalStorage } from '../../service/Storage';
 
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [medList, setMedList] = useState([]);
   const router = useRouter();
+  const currentUserEmail = useRef(null); 
 
   const parseTime = (reminderStr) => {
     if (!reminderStr) return null;
@@ -40,10 +40,8 @@ export default function HomeScreen() {
         second: 0
       });
 
-      // 🌟 ADD 1 HOUR DELAY THRESHOLD
       const missedThreshold = moment(todayReminder).add(1, 'hours');
 
-      // 1. Check if the current time is strictly past the 1-hour grace period
       if (currentTime.isAfter(missedThreshold)) {
         const hasEntryForToday = med.action?.some(entry => entry.date === today);
 
@@ -56,11 +54,11 @@ export default function HomeScreen() {
               action: arrayUnion({
                 status: 'Missed',
                 time: todayReminder.format('LT'),
-                date: today
+                date: today,
+                by: 'System'
               })
             });
 
-            // 🌟 FIRE IMMEDIATE NOTIFICATION THAT THEY MISSED IT
             await sendImmediateNotification(
               "🚨 Medication Missed",
               `You missed your scheduled dose of ${med.name}. Please check your tracker.`
@@ -89,7 +87,8 @@ export default function HomeScreen() {
         return; 
       }
 
-      // 🌟 LOGIN NOTIFICATION LOGIC (Only fires once per day so it isn't annoying)
+      currentUserEmail.current = user.email;
+
       const todayStr = moment().format('YYYY-MM-DD');
       const lastLoginNotif = await AsyncStorage.getItem('lastLoginNotif');
       if (lastLoginNotif !== todayStr) {
@@ -105,6 +104,27 @@ export default function HomeScreen() {
       unsubscribe = onSnapshot(q, (snapshot) => {
         const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
+        // 🌟 REAL-TIME "BOTH SIDES" NOTIFICATION LISTENER 🌟
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "modified") {
+            const data = change.doc.data();
+            const actionArray = data.action;
+            
+            if (actionArray && actionArray.length > 0) {
+              const lastAction = actionArray[actionArray.length - 1];
+              
+              if (lastAction.by && lastAction.by !== 'System' && lastAction.by !== currentUserEmail.current) {
+                const userName = lastAction.by.split('@')[0];
+                const medName = data.name ? data.name : 'a medication';
+                sendImmediateNotification(
+                  `💊 ${medName} Update`,
+                  `${userName} marked this medication as ${lastAction.status}.`
+                );
+              }
+            }
+          }
+        });
+
         checkAndMarkMissedMedications(meds);
 
         setMedList(meds);
