@@ -99,6 +99,55 @@ export default function Profile() {
     }
   };
 
+  // 🌟 NEW FUNCTION: Removes the link for both users
+  const handleRemovePatient = async () => {
+    Alert.alert('Remove Connection', 'Are you sure you want to disconnect from this patient?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Remove', 
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            const currentPatientId = userData.linkedPatientId;
+
+            // Clear Caregiver's Document
+            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+              linkedPatientId: null,
+              linkedPatientEmail: null,
+              linkedPatientName: null
+            });
+
+            // Clear Patient's Document
+            if (currentPatientId) {
+              await updateDoc(doc(db, 'users', currentPatientId), {
+                linkedCaregiverId: null,
+                linkedCaregiverEmail: null, 
+                linkedCaregiverName: null 
+              });
+            }
+
+            // Update Local Storage & State
+            const updatedUser = { 
+              ...userData, 
+              linkedPatientId: null,
+              linkedPatientEmail: null,
+              linkedPatientName: null
+            };
+            await setLocalStorage('userDetails', updatedUser);
+            setUserData(updatedUser);
+
+            Alert.alert('Success', 'Patient connection removed.');
+          } catch (error) {
+            Alert.alert('Error', error.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+      }
+    ]);
+  };
+
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure?', [
       { text: 'Cancel' },
@@ -131,9 +180,20 @@ export default function Profile() {
             <View style={styles.connectSection}>
               <Text style={styles.idLabel}>Connect to Patient:</Text>
               {userData.linkedPatientName ? (
-                <View style={styles.linkedInfo}>
-                  <Text style={styles.linkedText}>Linked to: {userData.linkedPatientName}</Text>
-                  <Ionicons name="checkmark-circle" size={20} color="green" />
+                <View>
+                  <View style={styles.linkedInfo}>
+                    <Text style={styles.linkedText}>Linked to: {userData.linkedPatientName}</Text>
+                    <Ionicons name="checkmark-circle" size={20} color="green" />
+                  </View>
+                  {/* 🌟 NEW REMOVE BUTTON */}
+                  <TouchableOpacity 
+                    style={styles.removeBtn} 
+                    onPress={handleRemovePatient}
+                    disabled={loading}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#ff4d4d" />
+                    <Text style={styles.removeBtnText}>Remove / Change Patient</Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <View style={styles.inputRow}>
@@ -219,6 +279,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fff4', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#c6f6d5'
   },
   linkedText: { color: '#2f855a', fontWeight: '500' },
+  // 🌟 NEW REMOVE BUTTON STYLES
+  removeBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: 10, padding: 10, borderRadius: 10,
+    backgroundColor: '#fff1f1', borderWidth: 1, borderColor: '#ffcdd2'
+  },
+  removeBtnText: { color: '#ff4d4d', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
   copyBox: { backgroundColor: '#f9f9f9', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' },
   idText: { fontSize: 14, color: '#333' },
   testButton: { 
