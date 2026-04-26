@@ -180,10 +180,25 @@ export default function MedicationHistory() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f1ff', paddingHorizontal: 25 },
-  headerContainer: { marginTop: 45, marginBottom: 20 },
-  headerText: { fontSize: 24, fontWeight: '600', color: '#8b5cf6' },
-  subText: { fontSize: 16, color: 'gray', marginTop: 4 },
+  container: { flex: 1},
+  headerContainer: { 
+    backgroundColor: '#8b5cf6', 
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
+    paddingBottom: 30,
+    paddingHorizontal: 25,
+    paddingTop: 40,
+    overflow: 'hidden',
+  },
+  headerText: { 
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+   },
+  subText: { fontSize: 16, color: '#E0D7FF', marginTop: 4 },
   listContainer: { flex: 1 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '80%', backgroundColor: 'white', borderRadius: 20, padding: 20 },

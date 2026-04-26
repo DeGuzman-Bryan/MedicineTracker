@@ -14,7 +14,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  SafeAreaView
 } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
 
@@ -48,7 +49,6 @@ export default function Profile() {
     }
   };
 
-  // ✅ Link or CHANGE a Patient
   const handleLinkPatient = async () => {
     if (!patientCode.trim()) {
       Alert.alert("Error", "Please enter a code.");
@@ -85,7 +85,6 @@ export default function Profile() {
     }
   };
 
-  // ✅ NEW: Disconnect current patient
   const handleDisconnect = async () => {
     Alert.alert('Disconnect', 'Stop monitoring this patient?', [
       { text: 'Cancel', style: 'cancel' },
@@ -124,66 +123,91 @@ export default function Profile() {
 
   return (
     <View style={styles.container}>
+      {/* PURPLE HEADER SECTION */}
       <View style={styles.headerContainer}>
-        <Text style={styles.headerText}>My Profile</Text>
-      </View>
-
-      {userData && (
-        <View style={styles.profileCard}>
-          <Ionicons name="person-circle-outline" size={90} color="#8b5cf6" />
-          <Text style={styles.name}>{userData.fullName}</Text>
-          <Text style={styles.username}>@{userData.userName}</Text>
+        <SafeAreaView>
+          <Text style={styles.headerTitle}>My Profile</Text>
           
-          <View style={styles.roleBox}><Text style={styles.roleLabel}>{userData.role?.toUpperCase()}</Text></View>
-
-          {/* CAREGIVER SECTION */}
-          {userData.role === 'caregiver' && (
-            <View style={{ width: '100%' }}>
-              {userData.linkedPatientName ? (
-                <View style={styles.monitorCard}>
-                  <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
-                  <View style={styles.actionRow}>
-                    <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
-                      <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
-                      <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
-                  <Text style={styles.linkBtnText}>Link to Patient</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* PATIENT SECTION */}
-          {userData.role === 'patient' && (
-            <View style={styles.idBox}>
-              <Text style={styles.idLabel}>YOUR PATIENT CODE:</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-                <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
-                <TouchableOpacity onPress={onShareID}><Ionicons name="share-social" size={18} color="#8b5cf6" /></TouchableOpacity>
+          {userData && (
+            <View style={styles.userInfoSection}>
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person" size={50} color="#8b5cf6" />
+              </View>
+              <Text style={styles.nameText}>{userData.fullName}</Text>
+              <Text style={styles.emailText}>{userData.email}</Text>
+              
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>{userData.role?.toUpperCase()}</Text>
               </View>
             </View>
           )}
-        </View>
-      )}
+        </SafeAreaView>
+      </View>
 
-      <TouchableOpacity style={styles.btnHome} onPress={() => router.push('/')}><Text style={styles.btnText}>Home</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}><Text style={styles.btnText}>Logout</Text></TouchableOpacity>
+      {/* WHITE CONTENT SECTION */}
+      <View style={styles.contentContainer}>
+        {userData?.role === 'caregiver' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Monitoring Status</Text>
+            {userData.linkedPatientName ? (
+              <View style={styles.monitorCard}>
+                <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
+                    <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
+                    <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
+                <Ionicons name="link-outline" size={20} color="#fff" style={{marginRight: 8}}/>
+                <Text style={styles.linkBtnText}>Link to Patient</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
+        {userData?.role === 'patient' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Your Patient Code</Text>
+            <View style={styles.idBox}>
+              <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
+              <TouchableOpacity onPress={onShareID} style={styles.shareBtn}>
+                <Ionicons name="share-social" size={20} color="#8b5cf6" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>Share this code with your caregiver to link accounts.</Text>
+          </View>
+        )}
+
+        {/* LOGOUT BUTTON */}
+        <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#fff" style={{marginRight: 8}}/>
+          <Text style={styles.btnText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* LINK MODAL */}
       <Modal visible={isModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter Patient Code</Text>
-            <TextInput style={styles.input} placeholder="Paste ID here" value={patientCode} onChangeText={setPatientCode} autoCapitalize="none" />
+            <Text style={styles.modalTitle}>Link Patient Account</Text>
+            <TextInput 
+                style={styles.input} 
+                placeholder="Paste Patient ID here" 
+                value={patientCode} 
+                onChangeText={setPatientCode} 
+                autoCapitalize="none" 
+            />
             <View style={styles.modalBtns}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}><Text>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
+                <Text style={{color: '#666'}}>Cancel</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
-                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff'}}>Save</Text>}
+                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff', fontWeight:'bold'}}>Link Now</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -194,31 +218,145 @@ export default function Profile() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 25, backgroundColor: '#f3f1ff' },
-  headerContainer: { marginTop: 40, marginBottom: 20, alignItems: 'center' },
-  headerText: { fontSize: 24, fontWeight: 'bold', color: '#5b21b6' },
-  profileCard: { backgroundColor: '#fff', padding: 20, borderRadius: 20, alignItems: 'center', elevation: 4 },
-  name: { fontSize: 20, fontWeight: 'bold' },
-  username: { color: '#666', marginBottom: 10 },
-  roleBox: { backgroundColor: '#f3f1ff', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 20, marginBottom: 15 },
-  roleLabel: { fontSize: 12, color: '#8b5cf6', fontWeight: 'bold' },
-  monitorCard: { backgroundColor: '#f0fdf4', padding: 15, borderRadius: 15, width: '100%', alignItems: 'center' },
-  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#166534' },
-  actionRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  
+  // Header Style
+  headerContainer: {
+    backgroundColor: '#8b5cf6', 
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    paddingHorizontal: 25,
+    paddingBottom: 40,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+    marginTop: 40,
+    marginBottom: 20,
+  },
+  userInfoSection: {
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  nameText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  emailText: {
+    fontSize: 14,
+    color: '#E0D7FF',
+    marginBottom: 15,
+  },
+  roleBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  roleBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+
+  // Content Style
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 25,
+    paddingTop: 30,
+  },
+  section: {
+    marginBottom: 25,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 10,
+    marginLeft: 5,
+  },
+  monitorCard: {
+    backgroundColor: '#f8fafc',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  actionRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center' },
-  actionText: { fontSize: 13, fontWeight: 'bold', color: '#8b5cf6' },
-  linkBtn: { backgroundColor: '#8b5cf6', padding: 15, borderRadius: 12, alignItems: 'center' },
-  linkBtnText: { color: '#fff', fontWeight: 'bold' },
-  idBox: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 12, width: '100%', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' },
-  idLabel: { fontSize: 10, color: '#666', fontWeight: 'bold' },
-  idValue: { fontSize: 11, fontWeight: 'bold', color: '#333' },
-  btnHome: { backgroundColor: '#6d28d9', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' },
-  btnLogout: { backgroundColor: '#e74c3c', padding: 16, borderRadius: 12, marginTop: 10, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', width: '80%', padding: 25, borderRadius: 20 },
-  modalTitle: { fontWeight: 'bold', marginBottom: 15 },
-  input: { backgroundColor: '#f1f5f9', padding: 12, borderRadius: 10, marginBottom: 20 },
-  modalBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, alignItems: 'center' },
-  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }
+  actionText: { fontSize: 14, fontWeight: '600', color: '#8b5cf6' },
+  
+  linkBtn: { 
+    backgroundColor: '#8b5cf6', 
+    flexDirection: 'row',
+    padding: 18, 
+    borderRadius: 15, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    elevation: 3,
+  },
+  linkBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+
+  idBox: { 
+    backgroundColor: '#f1f5f9', 
+    padding: 15, 
+    borderRadius: 15, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderStyle: 'dashed',
+  },
+  idValue: { fontSize: 13, fontWeight: 'bold', color: '#333', flex: 1 },
+  shareBtn: {
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 10,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  btnLogout: { 
+    backgroundColor: '#ef4444', 
+    flexDirection: 'row',
+    padding: 18, 
+    borderRadius: 15, 
+    marginTop: 'auto', 
+    marginBottom: 40,
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', width: '85%', padding: 30, borderRadius: 25 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  input: { backgroundColor: '#f1f5f9', padding: 15, borderRadius: 12, marginBottom: 20, fontSize: 16 },
+  modalBtns: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cancelBtn: { padding: 10 },
+  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 12 }
 });
