@@ -60,11 +60,9 @@ export default function AddMedicationForm() {
     const isEditing = !!params?.docId;
     const docId = isEditing ? params.docId : Date.now().toString();
     
-    // 1. Get user details from storage
     const userString = await AsyncStorage.getItem('userDetails');
     const user = JSON.parse(userString);
 
-    // 2. Validation
     if (!formData?.name || !formData?.reminder) {
       Alert.alert('Missing Info', 'Medicine Name and Reminder Time are required.');
       return;
@@ -79,8 +77,9 @@ export default function AddMedicationForm() {
     }
 
     try {
-      // 3. Prepare the Data
-      const docRef = doc(db, 'Medication', docId); // Note: Ensure collection name matches your Home Screen query ('Medication')
+      // 1. Save to Database
+      const docRef = doc(db, 'Medication', docId); 
+      
       const dataToSave = {
         ...formData,
         userEmail: user?.email || 'guest',
@@ -90,19 +89,19 @@ export default function AddMedicationForm() {
         type: formData.type || null,
         dose: formData.dose || '',
         when: formData.when || '',
+        reminder: formData.reminder, 
       };
 
-      // 4. Save to Firestore (REMOVE THE AWAIT)
-      // We don't 'await' here because we want the app to keep moving even if offline
       if (isEditing) {
-        updateDoc(docRef, dataToSave);
+        await updateDoc(docRef, dataToSave);
       } else {
-        setDoc(docRef, dataToSave);
+        await setDoc(docRef, dataToSave);
       }
 
-      // 5. Handle Notifications (background task)
+      // 2. Handle Notifications
       const permissionGranted = await requestPermissions();
       if (permissionGranted) {
+          // Correctly parse the reminder string (e.g., "10:30 AM")
           const [time, modifier] = formData.reminder.split(' ');
           let [hours, minutes] = time.split(':');
           hours = parseInt(hours, 10);
@@ -111,26 +110,32 @@ export default function AddMedicationForm() {
           if (modifier === 'PM' && hours < 12) hours += 12;
           if (modifier === 'AM' && hours === 12) hours = 0;
 
-          const triggerDate = new Date();
-          triggerDate.setHours(hours, minutes, 0, 0);
+          // Create a valid trigger date
+          const trigger = new Date();
+          trigger.setHours(hours);
+          trigger.setMinutes(minutes);
+          trigger.setSeconds(0);
 
-          if (triggerDate <= new Date()) {
-              triggerDate.setDate(triggerDate.getDate() + 1);
+          // If the time has already passed today, set it for tomorrow
+          if (trigger < new Date()) {
+            trigger.setDate(trigger.getDate() + 1);
           }
 
-          scheduleMedicationNotification(
-              formData.name,
-              `Dose: ${formData.dose || 'Take your medicine'}`,
-              triggerDate 
-          );
+          // FIX: Pass the correct data to your notification service
+          await scheduleMedicationNotification({
+            id: docId,
+            name: formData.name, // Use formData.name, NOT just 'name'
+            trigger: trigger
+          });
+          
+          console.log("Notification scheduled for:", trigger.toString());
       }
 
-      // 6. Navigate Home Immediately
       router.replace('(tabs)');
 
     } catch (e) { 
-      console.error("Save Error:", e);
-      Alert.alert('Error', 'Failed to save medication.'); 
+      console.error("Save/Notification Error:", e);
+      Alert.alert('Error', 'Failed to save or schedule notification.'); 
     }
   };
 
