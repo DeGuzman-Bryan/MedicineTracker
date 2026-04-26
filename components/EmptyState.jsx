@@ -50,7 +50,7 @@ export default function EmptyState() {
 
       <TouchableOpacity
         style={{
-          backgroundColor: Colors.PRIMARY,
+          backgroundColor: '#8b5cf6',
           paddingVertical: 15,
           borderRadius: 10,
           width: '80%',

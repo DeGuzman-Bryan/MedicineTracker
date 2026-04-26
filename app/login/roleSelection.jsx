@@ -69,15 +69,15 @@ export default function RoleSelection() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', padding: 25, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', color: Colors.PRIMARY, textAlign: 'center' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#8b5cf6', textAlign: 'center' },
   subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginVertical: 20 },
   cardContainer: { gap: 20 },
   roleCard: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#fbf0ff',
     padding: 20,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: Colors.PRIMARY,
+    borderColor: '#8b5cf6',
     alignItems: 'center',
   },
   emoji: { fontSize: 40, marginBottom: 10 },

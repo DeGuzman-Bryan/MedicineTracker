@@ -49,6 +49,10 @@ export default function Profile() {
     }
   };
 
+  const handleEditProfile = () => {
+    router.push('/editProfile/edit-profile');
+  };
+
   const handleLinkPatient = async () => {
     if (!patientCode.trim()) {
       Alert.alert("Error", "Please enter a code.");
@@ -66,10 +70,10 @@ export default function Profile() {
 
       const patientData = patientSnap.data();
       const caregiverRef = doc(db, 'users', auth.currentUser.uid);
-      
+
       const updateData = {
         linkedPatientId: patientCode.trim(),
-        linkedPatientEmail: patientData.email, 
+        linkedPatientEmail: patientData.email,
         linkedPatientName: patientData.fullName || patientData.userName
       };
 
@@ -77,7 +81,7 @@ export default function Profile() {
       Alert.alert("Success", `Now monitoring ${updateData.linkedPatientName}`);
       setModalVisible(false);
       setPatientCode('');
-      fetchUserData(); 
+      fetchUserData();
     } catch (err) {
       Alert.alert("Error", "Failed to link.");
     } finally {
@@ -88,9 +92,9 @@ export default function Profile() {
   const handleDisconnect = async () => {
     Alert.alert('Disconnect', 'Stop monitoring this patient?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Stop', 
-        style: 'destructive', 
+      {
+        text: 'Stop',
+        style: 'destructive',
         onPress: async () => {
           const userRef = doc(db, 'users', auth.currentUser.uid);
           await updateDoc(userRef, {
@@ -99,7 +103,7 @@ export default function Profile() {
             linkedPatientName: deleteField()
           });
           fetchUserData();
-        } 
+        }
       }
     ]);
   };
@@ -111,23 +115,30 @@ export default function Profile() {
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure?', [
       { text: 'Cancel' },
-      { text: 'Logout', onPress: async () => {
+      {
+        text: 'Logout', onPress: async () => {
           await signOut(auth);
           await AsyncStorage.removeItem('userDetails');
           router.replace('/login/signIn');
-      }}
+        }
+      }
     ]);
   };
 
-  if (loading) return <ActivityIndicator size="large" style={{flex:1}} />;
+  if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} />;
 
   return (
     <View style={styles.container}>
-      {/* PURPLE HEADER SECTION */}
       <View style={styles.headerContainer}>
         <SafeAreaView>
-          <Text style={styles.headerTitle}>My Profile</Text>
-          
+          <View style={styles.headerTopRow}>
+            <View style={{ width: 40 }} />
+            <Text style={styles.headerTitle}>My Profile</Text>
+            <TouchableOpacity onPress={handleEditProfile} style={styles.editIconButton}>
+              <Ionicons name="create-outline" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+
           {userData && (
             <View style={styles.userInfoSection}>
               <View style={styles.avatarCircle}>
@@ -135,7 +146,6 @@ export default function Profile() {
               </View>
               <Text style={styles.nameText}>{userData.fullName}</Text>
               <Text style={styles.emailText}>{userData.email}</Text>
-              
               <View style={styles.roleBadge}>
                 <Text style={styles.roleBadgeText}>{userData.role?.toUpperCase()}</Text>
               </View>
@@ -144,7 +154,6 @@ export default function Profile() {
         </SafeAreaView>
       </View>
 
-      {/* WHITE CONTENT SECTION */}
       <View style={styles.contentContainer}>
         {userData?.role === 'caregiver' && (
           <View style={styles.section}>
@@ -154,16 +163,18 @@ export default function Profile() {
                 <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
                 <View style={styles.actionRow}>
                   <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
-                    <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" /><Text style={styles.actionText}> Change</Text>
+                    <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" />
+                    <Text style={styles.actionText}> Change</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
-                    <Ionicons name="close-circle" size={16} color="#e74c3c" /><Text style={[styles.actionText, {color: '#e74c3c'}]}> Remove</Text>
+                    <Ionicons name="close-circle" size={16} color="#e74c3c" />
+                    <Text style={[styles.actionText, { color: '#e74c3c' }]}> Remove</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
               <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
-                <Ionicons name="link-outline" size={20} color="#fff" style={{marginRight: 8}}/>
+                <Ionicons name="link-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={styles.linkBtnText}>Link to Patient</Text>
               </TouchableOpacity>
             )}
@@ -183,31 +194,33 @@ export default function Profile() {
           </View>
         )}
 
-        {/* LOGOUT BUTTON */}
         <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#fff" style={{marginRight: 8}}/>
+          <Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
           <Text style={styles.btnText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
-      {/* LINK MODAL */}
       <Modal visible={isModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Link Patient Account</Text>
-            <TextInput 
-                style={styles.input} 
-                placeholder="Paste Patient ID here" 
-                value={patientCode} 
-                onChangeText={setPatientCode} 
-                autoCapitalize="none" 
+            <TextInput
+              style={styles.input}
+              placeholder="Paste Patient ID here"
+              value={patientCode}
+              onChangeText={setPatientCode}
+              autoCapitalize="none"
             />
             <View style={styles.modalBtns}>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
-                <Text style={{color: '#666'}}>Cancel</Text>
+                <Text style={{ color: '#666' }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
-                {linking ? <ActivityIndicator color="#fff" /> : <Text style={{color:'#fff', fontWeight:'bold'}}>Link Now</Text>}
+                {linking ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Link Now</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -219,22 +232,29 @@ export default function Profile() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  
-  // Header Style
   headerContainer: {
-    backgroundColor: '#8b5cf6', 
+    backgroundColor: '#8b5cf6',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     paddingHorizontal: 25,
     paddingBottom: 40,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 40,
+    marginBottom: 20,
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: 'white',
-    textAlign: 'center',
-    marginTop: 40,
-    marginBottom: 20,
+  },
+  editIconButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
   },
   userInfoSection: {
     alignItems: 'center',
@@ -275,8 +295,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1,
   },
-
-  // Content Style
   contentContainer: {
     flex: 1,
     paddingHorizontal: 25,
@@ -303,24 +321,22 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center' },
   actionText: { fontSize: 14, fontWeight: '600', color: '#8b5cf6' },
-  
-  linkBtn: { 
-    backgroundColor: '#8b5cf6', 
+  linkBtn: {
+    backgroundColor: '#8b5cf6',
     flexDirection: 'row',
-    padding: 18, 
-    borderRadius: 15, 
-    alignItems: 'center', 
+    padding: 18,
+    borderRadius: 15,
+    alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
   },
   linkBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-  idBox: { 
-    backgroundColor: '#f1f5f9', 
-    padding: 15, 
-    borderRadius: 15, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  idBox: {
+    backgroundColor: '#f1f5f9',
+    padding: 15,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -338,20 +354,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-
-  btnLogout: { 
-    backgroundColor: '#ef4444', 
+  btnLogout: {
+    backgroundColor: '#ef4444',
     flexDirection: 'row',
-    padding: 18, 
-    borderRadius: 15, 
-    marginTop: 'auto', 
+    padding: 18,
+    borderRadius: 15,
+    marginTop: 'auto',
     marginBottom: 40,
-    alignItems: 'center', 
-    justifyContent: 'center' 
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-
-  // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#fff', width: '85%', padding: 30, borderRadius: 25 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
