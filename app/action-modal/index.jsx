@@ -1,144 +1,219 @@
-import AntDesign from '@expo/vector-icons/AntDesign';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { AntDesign, FontAwesome, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View, SafeAreaView } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 
-export default function Index() {
-  const medicine = useLocalSearchParams(); 
-  const { selectedDate, reminder, docId } = medicine;
+export default function ActionModal() {
+  const medicine = useLocalSearchParams();
+  const { selectedDate, reminder, docId, name } = medicine;
   const router = useRouter();
 
   const onDeletePress = () => {
-    Alert.alert('Delete Medication', 'Are you sure?', [
+    Alert.alert('Delete Medication', 'Are you sure you want to remove this?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
           try {
-            // FIX 1: Changed 'medication' to 'Medication'
             await deleteDoc(doc(db, 'Medication', docId));
-            router.replace('(tabs)'); 
-          } catch (e) { Alert.alert('Error', 'Could not delete.'); }
-      }},
+            router.replace('(tabs)');
+          } catch (e) {
+            Alert.alert('Error', 'Could not delete.');
+          }
+        },
+      },
     ]);
   };
 
   const onEditPress = () => {
     router.push({
       pathname: '/add-new-medication',
-      params: { 
+      params: {
         ...medicine,
-        type: typeof medicine.type === 'object' ? JSON.stringify(medicine.type) : medicine.type 
-      }
+        type: typeof medicine.type === 'object' ? JSON.stringify(medicine.type) : medicine.type,
+      },
     });
-  };
-
-  // Good practice: save as a real Date or Timestamp
-  const action = {
-    status: 'Taken',
-    date: new Date(), // Firestore will convert this to a Timestamp object
   };
 
   const UpdateActionStatus = async (status) => {
     try {
-      // Create a clean object with a string date or a JS Date object
-      // Avoid passing the raw 'medicine' params directly into the database
-      const actionData = { 
-        status, 
-        time: moment().format('LT'), 
-        // Ensure date is a simple string to avoid the Object error
-        date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll') 
+      const actionData = {
+        status,
+        time: moment().format('LT'),
+        date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll'),
       };
 
-      // FIX 2: Changed 'medication' to 'Medication'
       await updateDoc(doc(db, 'Medication', docId), {
         action: arrayUnion(actionData),
       });
-      
+
       router.replace('(tabs)');
-    } catch (e) { 
+    } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'Failed to update.'); 
+      Alert.alert('Error', 'Failed to update.');
     }
   };
 
-  // --- THE FIX FOR THE TIMESTAMP STRING ---
   const formatReminderTime = (reminderStr) => {
     if (!reminderStr) return 'No time set';
-    
-    // Check if it's the raw Firestore string: "Timestamp(seconds=1769466840, nanoseconds=0)"
     const match = reminderStr.match(/seconds=(\d+)/);
     if (match) {
       const seconds = parseInt(match[1]);
-      const date = new Date(seconds * 1000);
-      return date.toLocaleTimeString([], {
+      return new Date(seconds * 1000).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
       });
     }
-    
-    // If it's already a normal string (like "10:30 AM"), return it as is
     return reminderStr;
   };
 
   return (
     <View style={styles.container}>
-      <Image 
-        source={require('../../assets/images/notification.gif')} 
-        style={styles.image} 
-      />
-      
-      <Text style={styles.dateText}>{selectedDate}</Text>
-      
-      {/* USE THE NEW FORMATTING FUNCTION HERE */}
-      <Text style={styles.reminderText}>{formatReminderTime(reminder)}</Text>
-      
-      <Text style={styles.subText}>It's time to take</Text>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Top Header Row with Minimal Icons */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <Ionicons name="close" size={28} color="#666" />
+          </TouchableOpacity>
+          <View style={styles.rightActions}>
+            <TouchableOpacity onPress={onEditPress} style={styles.iconBtn}>
+              <AntDesign name="edit" size={20} color="#8b5cf6" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onDeletePress} style={[styles.iconBtn, { marginLeft: 12 }]}>
+              <AntDesign name="delete" size={20} color="#ff4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.missedBtn} onPress={() => UpdateActionStatus('Missed')}>
-          <AntDesign name="close" size={22} color="red" />
-          <Text style={styles.missedText}>Missed</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.takenBtn} onPress={() => UpdateActionStatus('Taken')}>
-          <AntDesign name="check" size={22} color="white" />
-          <Text style={styles.takenText}>Taken</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.content}>
+          
 
-      <TouchableOpacity style={styles.editBtn} onPress={onEditPress}>
-        <AntDesign name="edit" size={22} color="#007AFF" />
-        <Text style={styles.editText}>Edit Medication</Text>
-      </TouchableOpacity>
+          <View style={styles.infoCard}>
+            <View style={styles.imageContainer}>
+            <Image
+              source={require('../../assets/images/notification.gif')}
+              style={styles.image}
+            />
+          </View>
+            <Text style={styles.dateLabel}>{selectedDate}</Text>
+            <Text style={styles.timeText}>{formatReminderTime(reminder)}</Text>
+            <Text style={styles.medicationName}>{name || 'Medication Name'}</Text>
+            <Text style={styles.subText}>It's time for your scheduled dose.</Text>
+          </View>
 
-      <TouchableOpacity style={styles.deleteBtn} onPress={onDeletePress}>
-        <MaterialIcons name="delete-forever" size={24} color="#ff4444" />
-        <Text style={styles.deleteText}>Delete Medication</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', bottom: 50 }}>
-        <FontAwesome name="close" size={44} color="gray" />
-      </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.takenBtn} 
+            onPress={() => UpdateActionStatus('Taken')}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="white" />
+            <Text style={styles.takenText}>Mark as Taken</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 25, flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  image: { width: 120, height: 120 },
-  dateText: { marginTop: 20, fontSize: 16, color: '#555' },
-  reminderText: { fontSize: 32, fontWeight: 'bold', color: '#222', marginVertical: 10, textAlign: 'center' },
-  subText: { fontSize: 18, color: '#444', marginBottom: 25 },
-  buttonRow: { flexDirection: 'row', gap: 15 },
-  missedBtn: { padding: 12, flexDirection: 'row', borderWidth: 2, borderColor: 'red', borderRadius: 10, gap: 6, alignItems: 'center' },
-  missedText: { color: 'red', fontWeight: 'bold', fontSize: 18 },
-  takenBtn: { padding: 12, flexDirection: 'row', backgroundColor: '#3dd474ff', borderRadius: 10, gap: 6, alignItems: 'center' },
-  takenText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  editBtn: { marginTop: 30, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  editText: { color: '#007AFF', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { marginTop: 15, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  deleteText: { color: '#ff4444', fontSize: 17, fontWeight: 'bold' }
+  container: {
+    flex: 1,
+    backgroundColor: '#f3f1ff',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  rightActions: {
+    flexDirection: 'row',
+  },
+  closeBtn: {
+    padding: 8,
+  },
+  iconBtn: {
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    justifyContent: 'center',
+  },
+  imageContainer: {
+    marginBottom: 30,
+  },
+  image: {
+    width: 140,
+    height: 140,
+  },
+  infoCard: {
+    backgroundColor: 'white',
+    width: '100%',
+    padding: 30,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 40,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  dateLabel: {
+    fontSize: 16,
+    color: '#8b5cf6',
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  timeText: {
+    fontSize: 38,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 10,
+  },
+  medicationName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4b5563',
+    textAlign: 'center',
+  },
+  subText: {
+    fontSize: 15,
+    color: '#9ca3af',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  takenBtn: {
+    backgroundColor: '#8b5cf6', // Theme purple
+    flexDirection: 'row',
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    elevation: 3,
+  },
+  takenText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginLeft: 10,
+  },
 });
