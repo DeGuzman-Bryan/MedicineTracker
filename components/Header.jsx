@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View, StyleSheet, SafeAreaView, ImageBackground } from 'react-native';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useRouter } from 'expo-router';
 import { auth, db } from '../config/FirebaseConfig'; 
 import { doc, getDoc } from 'firebase/firestore';
+
+// IMPORTANT: No 'import' for the image here.
 
 export default function Header() {
   const [userName, setUserName] = useState('');
@@ -16,43 +18,78 @@ export default function Header() {
         if (user) {
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
-            setUserName(userDoc.data().userName);
-          } else {
-            console.log('User document not found in Firestore');
+            setUserName(userDoc.data()?.userName);
           }
         }
       } catch (error) {
         console.error('Error fetching user name:', error);
       }
     };
-
     fetchUserName();
   }, [user]);
 
   return (
-    <View style={{ marginTop: 20, paddingHorizontal: 10 }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center', // centers icon vertically with texts
-        }}
-      >
-        {/* Texts stacked vertically */}
-        <View>
-          <Text style={{ fontSize: 24, fontWeight: '600', color:'#8b5cf6' }}>
-            Welcome, {userName || user?.displayName || 'No user logged in'}!
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: '500', color: 'gray', marginTop: 4 }}>
-            How are you feeling today?
-          </Text>
-        </View>
+    <ImageBackground 
+      source={require('../assets/images/med1.jpg')} 
+      style={styles.headerContainer}
+      imageStyle={styles.imageInnerStyle}
+    >
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.greetingText}>
+              Welcome, {userName || 'Guest'}!
+            </Text>
+            <Text style={styles.subGreetingText}>
+              How are you feeling today?
+            </Text>
+          </View>
 
-        {/* Icon vertically centered with the texts */}
-        <TouchableOpacity onPress={() => router.push('/add-new-medication')}>
-          <AntDesign name="medicine-box" size={28} color="black" />
-        </TouchableOpacity>
-      </View>
-    </View>
+          
+        </View>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    backgroundColor: '#8b5cf6', 
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
+    paddingBottom: 30,
+    paddingHorizontal: 25,
+    height: 180, // Set a specific height to see the image better
+    overflow: 'hidden', 
+  },
+  imageInnerStyle: {
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
+    opacity: 0.85, 
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  greetingText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  subGreetingText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#E0D7FF',
+    marginTop: 4,
+  },
+  iconButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 10,
+    borderRadius: 12,
+  }
+});

@@ -79,15 +79,6 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#8b5cf6' }}>
         <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <FontAwesome name="home" size={24} color={color} /> }} />
-        <Tabs.Screen 
-          name="add-new-medication/index" 
-          options={{
-            title: 'Add',
-            tabBarIcon: ({ color }) => (
-              <MaterialCommunityIcons name="plus-circle" size={32} color={color} />
-            ),
-          }}
-        />
         <Tabs.Screen name="History" options={{ title: 'History', tabBarIcon: ({ color }) => <AntDesign name="history" size={24} color={color} /> }} />
         <Tabs.Screen name="Profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} /> }} />
       </Tabs>

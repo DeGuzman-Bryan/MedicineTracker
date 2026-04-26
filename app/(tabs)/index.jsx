@@ -58,7 +58,6 @@ export default function HomeScreen() {
 
   return (
     <View style={{
-      padding: 25,
       backgroundColor: '#f3f1ff',
       flex: 1, // Use flex: 1 instead of height: '100%' for better layout
     }}>

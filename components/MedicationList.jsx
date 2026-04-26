@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AntDesign from '@expo/vector-icons/AntDesign';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
@@ -171,18 +172,6 @@ export default function MedicationList() {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={require('./../assets/images/med1.jpg')}
-        style={styles.banner}
-        imageStyle={{ borderRadius: 20 }}
-        resizeMode="cover"
-      >
-        <View style={styles.bannerTextContainer}>
-          <Text style={styles.bannerTitle}>Stay Healthy, Stay Happy</Text>
-          <Text style={styles.bannerSubtitle}>Consistency is the best medicine.</Text>
-        </View>
-      </ImageBackground>
-
       <View style={{height: 80}}>
         <FlatList
             data={dateRange}
@@ -206,6 +195,17 @@ export default function MedicationList() {
         />
       </View>
 
+      <View style={styles.sectionHeader}>
+  <Text style={styles.sectionTitle}>Today's Medication</Text>
+  
+  <TouchableOpacity 
+    style={styles.addBtn}
+    onPress={() => router.push('/add-new-medication')}
+  >
+    <AntDesign name="plus" size={24} color="white" />
+  </TouchableOpacity>
+</View>
+
       {loading ? (
         <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
       ) : medList.length === 0 ? (
@@ -227,11 +227,29 @@ export default function MedicationList() {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1},
-  banner: { width: '100%', height: 180, borderRadius: 20, overflow: 'hidden', marginTop: 10, marginBottom: 10 },
-  bannerTextContainer: { padding: 20 },
-  bannerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  bannerSubtitle: { fontSize: 12, color: '#fff' },
-  dateList: { marginBottom: 10, padding: 5 },
-  dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
+  container: {flex: 1, marginLeft: 15, marginRight: 15},
+  dateList: { marginTop: 10, marginBottom: 10, padding: 5 },
+  dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80, borderWidth: 2, borderColor: '#c7c7f8' },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between', // Pushes text to left and button to right
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '500', // Made bold to match your image
+    color: '#333',
+  },
+  addBtn: {
+    backgroundColor: '#8b5cf6', // Purple color
+    width: 40,
+    height: 40,
+    borderRadius: 10, // Perfect circle
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+  },
 });
