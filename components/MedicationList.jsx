@@ -5,14 +5,13 @@ import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
-  ImageBackground,
   LayoutAnimation,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   UIManager,
-  View,
+  View
 } from 'react-native';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
@@ -119,17 +118,7 @@ export default function MedicationList({ medList: realTimeMedList = [] }) {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={require('./../assets/images/med1.jpg')}
-        style={styles.banner}
-        imageStyle={{ borderRadius: 20 }}
-        resizeMode="cover"
-      >
-        <View style={styles.bannerTextContainer}>
-          <Text style={styles.bannerTitle}>Stay Healthy, Stay Happy</Text>
-          <Text style={styles.bannerSubtitle}>Consistency is the best medicine.</Text>
-        </View>
-      </ImageBackground>
+     
 
       <View style={{height: 80}}>
         <FlatList

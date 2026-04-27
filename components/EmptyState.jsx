@@ -6,7 +6,6 @@ export default function EmptyState() {
 
   return (
     <View style={styles.container}>
-      {/* Uses the medicine.png file you pulled earlier! */}
       <Image 
         source={require('./../assets/images/medicine.png')} 
         style={styles.image} 
@@ -20,7 +19,7 @@ export default function EmptyState() {
 
       <TouchableOpacity 
         style={styles.button} 
-        onPress={() => router.push('/add-new-medication/index')}
+        onPress={() => router.push('/add-new-medication')}
       >
         <Text style={styles.buttonText}>+ Add New Medication</Text>
       </TouchableOpacity>
@@ -39,7 +38,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     marginBottom: 20,
-    opacity: 0.8, // Slightly faded like in your screenshot
+    opacity: 0.8,
   },
   title: {
     fontSize: 20,
@@ -55,7 +54,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   button: {
-    backgroundColor: '#8b5cf6', // 🌟 Fixed Purple Color
+    backgroundColor: '#8b5cf6', 
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 10,

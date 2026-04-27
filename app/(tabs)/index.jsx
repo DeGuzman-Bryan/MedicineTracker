@@ -199,7 +199,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  mainContainer: { padding: 25, backgroundColor: '#f3f1ff', flex: 1 },
+  mainContainer: {  backgroundColor: '#f3f1ff', flex: 1 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   networkBanner: {
     padding: 12,
