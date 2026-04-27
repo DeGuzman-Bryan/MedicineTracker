@@ -1,302 +1,403 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { deleteField, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  SafeAreaView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
-import { getLocalStorage, setLocalStorage } from '../../service/Storage';
-import { requestPermissions } from '../../service/notifications';
 
 export default function Profile() {
   const router = useRouter();
   const [userData, setUserData] = useState(null);
-  const [patientId, setPatientId] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [patientCode, setPatientCode] = useState('');
+  const [linking, setLinking] = useState(false);
 
-  useEffect(() => {
-    getUserData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserData();
+    }, [])
+  );
 
-  const getUserData = async () => {
-    const user = await getLocalStorage('userDetails');
-    setUserData(user);
-  };
-
-  const sendTestNotification = async () => {
-    const hasPermission = await requestPermissions();
-    
-    if (!hasPermission) {
-      Alert.alert("Permission Denied", "Please enable notifications in your phone settings.");
-      return;
-    }
-
+  const fetchUserData = async () => {
     try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "💊 Medication Reminder Test",
-          body: "It works! This is how your daily reminders will look.",
-          sound: true,
-          priority: Notifications.AndroidNotificationPriority.MAX,
-        },
-        trigger: {
-          seconds: 5,
-          channelId: 'default', 
-        },
-      });
-
-      Alert.alert("Scheduled!", "Notification will arrive in 5 seconds. Close the app or lock your screen now!");
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Could not schedule notification. Check your console.");
-    }
-  };
-
-  const handleConnectPatient = async () => {
-    if (!patientId.trim()) {
-      Alert.alert('Error', 'Please enter a Patient Code');
-      return;
-    }
-    setLoading(true);
-    try {
-      const patientDoc = await getDoc(doc(db, 'users', patientId.trim()));
-      if (!patientDoc.exists()) {
-        Alert.alert('Error', 'Invalid Code. Patient not found.');
-        return;
+      const user = auth.currentUser;
+      if (!user) return;
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        setUserData(userSnap.data());
       }
-
-      const patientData = patientDoc.data();
-
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        linkedPatientId: patientId.trim(),
-        linkedPatientEmail: patientData.email,
-        linkedPatientName: patientData.fullName
-      });
-
-      await updateDoc(doc(db, 'users', patientId.trim()), {
-        linkedCaregiverId: auth.currentUser.uid,
-        linkedCaregiverEmail: userData.email, 
-        linkedCaregiverName: userData.fullName 
-      });
-
-      const updatedUser = { 
-        ...userData, 
-        linkedPatientId: patientId.trim(),
-        linkedPatientEmail: patientData.email,
-        linkedPatientName: patientData.fullName
-      };
-      await setLocalStorage('userDetails', updatedUser);
-      setUserData(updatedUser);
-
-      Alert.alert('Success', `Connected to ${patientData.fullName}'s records!`);
-      setPatientId('');
-    } catch (error) {
-      Alert.alert('Error', error.message);
+    } catch (err) {
+      console.error('Error fetching:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 🌟 NEW FUNCTION: Removes the link for both users
-  const handleRemovePatient = async () => {
-    Alert.alert('Remove Connection', 'Are you sure you want to disconnect from this patient?', [
+  const handleEditProfile = () => {
+    router.push('/editProfile/edit-profile');
+  };
+
+  // Bi-directional Link (Updates both Caregiver & Patient)
+  const handleLinkPatient = async () => {
+    if (!patientCode.trim()) {
+      Alert.alert("Error", "Please enter a code.");
+      return;
+    }
+    setLinking(true);
+    try {
+      const patientRef = doc(db, 'users', patientCode.trim());
+      const patientSnap = await getDoc(patientRef);
+
+      if (!patientSnap.exists()) {
+        Alert.alert("Error", "Invalid Patient Code.");
+        return;
+      }
+
+      const patientData = patientSnap.data();
+      const caregiverRef = doc(db, 'users', auth.currentUser.uid);
+
+      // 1. Update Caregiver Document
+      const updateData = {
+        linkedPatientId: patientCode.trim(),
+        linkedPatientEmail: patientData.email,
+        linkedPatientName: patientData.fullName || patientData.userName
+      };
+      await updateDoc(caregiverRef, updateData);
+
+      // 2. Update Patient Document
+      await updateDoc(patientRef, {
+        linkedCaregiverId: auth.currentUser.uid,
+        linkedCaregiverEmail: userData.email, 
+        linkedCaregiverName: userData.fullName 
+      });
+
+      Alert.alert("Success", `Now monitoring ${updateData.linkedPatientName}`);
+      setModalVisible(false);
+      setPatientCode('');
+      fetchUserData();
+    } catch (err) {
+      Alert.alert("Error", "Failed to link.");
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  // Bi-directional Disconnect (Clears both Caregiver & Patient)
+  const handleDisconnect = async () => {
+    Alert.alert('Disconnect', 'Stop monitoring this patient?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Remove', 
+      {
+        text: 'Stop',
         style: 'destructive',
         onPress: async () => {
-          setLoading(true);
           try {
             const currentPatientId = userData.linkedPatientId;
-
-            // Clear Caregiver's Document
-            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-              linkedPatientId: null,
-              linkedPatientEmail: null,
-              linkedPatientName: null
+            const caregiverRef = doc(db, 'users', auth.currentUser.uid);
+            
+            // 1. Clear Caregiver Document
+            await updateDoc(caregiverRef, {
+              linkedPatientId: deleteField(),
+              linkedPatientEmail: deleteField(),
+              linkedPatientName: deleteField()
             });
 
-            // Clear Patient's Document
+            // 2. Clear Patient Document
             if (currentPatientId) {
-              await updateDoc(doc(db, 'users', currentPatientId), {
-                linkedCaregiverId: null,
-                linkedCaregiverEmail: null, 
-                linkedCaregiverName: null 
+              const patientRef = doc(db, 'users', currentPatientId);
+              await updateDoc(patientRef, {
+                linkedCaregiverId: deleteField(),
+                linkedCaregiverEmail: deleteField(), 
+                linkedCaregiverName: deleteField() 
               });
             }
 
-            // Update Local Storage & State
-            const updatedUser = { 
-              ...userData, 
-              linkedPatientId: null,
-              linkedPatientEmail: null,
-              linkedPatientName: null
-            };
-            await setLocalStorage('userDetails', updatedUser);
-            setUserData(updatedUser);
-
-            Alert.alert('Success', 'Patient connection removed.');
+            fetchUserData();
           } catch (error) {
-            Alert.alert('Error', error.message);
-          } finally {
-            setLoading(false);
+            Alert.alert("Error", "Failed to disconnect.");
           }
         }
       }
     ]);
   };
 
+  const onShareID = async () => {
+    await Share.share({ message: `My Patient Code: ${auth.currentUser.uid}` });
+  };
+
   const handleLogout = async () => {
     Alert.alert('Logout', 'Are you sure?', [
       { text: 'Cancel' },
-      { 
-        text: 'Logout', 
-        onPress: async () => {
+      {
+        text: 'Logout', onPress: async () => {
           await signOut(auth);
           await AsyncStorage.removeItem('userDetails');
           router.replace('/login/signIn');
-        } 
+        }
       }
     ]);
   };
 
+  if (loading) return <ActivityIndicator size="large" style={{ flex: 1 }} color="#8b5cf6" />;
+
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Profile</Text>
-
-      {userData && (
-        <View style={styles.profileCard}>
-          <Text style={styles.name}>{userData.fullName}</Text>
-          <Text style={styles.email}>{userData.email}</Text>
-          
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{userData.role?.toUpperCase()}</Text>
+      <View style={styles.headerContainer}>
+        <SafeAreaView>
+          <View style={styles.headerTopRow}>
+            <View style={{ width: 40 }} />
+            <Text style={styles.headerTitle}>My Profile</Text>
+            <TouchableOpacity onPress={handleEditProfile} style={styles.editIconButton}>
+              <Ionicons name="create-outline" size={24} color="white" />
+            </TouchableOpacity>
           </View>
 
-          {/* CAREGIVER SECTION */}
-          {userData.role === 'caregiver' && (
-            <View style={styles.connectSection}>
-              <Text style={styles.idLabel}>Connect to Patient:</Text>
-              {userData.linkedPatientName ? (
-                <View>
-                  <View style={styles.linkedInfo}>
-                    <Text style={styles.linkedText}>Linked to: {userData.linkedPatientName}</Text>
-                    <Ionicons name="checkmark-circle" size={20} color="green" />
-                  </View>
-                  {/* 🌟 NEW REMOVE BUTTON */}
-                  <TouchableOpacity 
-                    style={styles.removeBtn} 
-                    onPress={handleRemovePatient}
-                    disabled={loading}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#ff4d4d" />
-                    <Text style={styles.removeBtnText}>Remove / Change Patient</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.inputRow}>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Paste Patient Code Here"
-                    value={patientId}
-                    onChangeText={setPatientId}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity 
-                    style={styles.connectBtn} 
-                    onPress={handleConnectPatient}
-                    disabled={loading}
-                  >
-                    <Ionicons name="link" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* PATIENT SECTION: Long Press to Copy */}
-          {userData.role === 'patient' && (
-            <View style={styles.idSection}>
-              <Text style={styles.idLabel}>Your Share Code (Long press to copy):</Text>
-              <View style={styles.copyBox}>
-                <Text style={styles.idText} selectable={true}>{userData.uid}</Text>
+          {userData && (
+            <View style={styles.userInfoSection}>
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person" size={50} color="#8b5cf6" />
+              </View>
+              <Text style={styles.nameText}>{userData.fullName}</Text>
+              <Text style={styles.emailText}>{userData.email}</Text>
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>{userData.role?.toUpperCase()}</Text>
               </View>
             </View>
           )}
+        </SafeAreaView>
+      </View>
 
-          {/* TEST NOTIFICATION BUTTON */}
-          <View style={[styles.idSection, { marginTop: 15 }]}>
-            <Text style={styles.idLabel}>System Tools</Text>
-            <TouchableOpacity 
-              style={styles.testButton} 
-              onPress={sendTestNotification}
-            >
-              <Ionicons name="notifications-outline" size={20} color="#8b5cf6" />
-              <Text style={styles.testButtonText}>Test Notification</Text>
-            </TouchableOpacity>
+      <View style={styles.contentContainer}>
+        {userData?.role === 'caregiver' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Monitoring Status</Text>
+            {userData.linkedPatientName ? (
+              <View style={styles.monitorCard}>
+                <Text style={styles.monitorName}>{userData.linkedPatientName}</Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.actionBtn}>
+                    <Ionicons name="swap-horizontal" size={16} color="#8b5cf6" />
+                    <Text style={styles.actionText}> Change</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleDisconnect} style={styles.actionBtn}>
+                    <Ionicons name="close-circle" size={16} color="#e74c3c" />
+                    <Text style={[styles.actionText, { color: '#e74c3c' }]}> Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.linkBtn} onPress={() => setModalVisible(true)}>
+                <Ionicons name="link-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.linkBtnText}>Link to Patient</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {userData?.role === 'patient' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Your Patient Code</Text>
+            <View style={styles.idBox}>
+              <Text selectable style={styles.idValue}>{auth.currentUser.uid}</Text>
+              <TouchableOpacity onPress={onShareID} style={styles.shareBtn}>
+                <Ionicons name="share-social" size={20} color="#8b5cf6" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>Share this code with your caregiver to link accounts.</Text>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.btnText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={isModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Link Patient Account</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Paste Patient ID here"
+              value={patientCode}
+              onChangeText={setPatientCode}
+              autoCapitalize="none"
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
+                <Text style={{ color: '#666', fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleLinkPatient} style={styles.saveBtn}>
+                {linking ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Link Now</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      )}
-
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={20} color="#ff4d4d" />
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 25, backgroundColor: '#f3f1ff' },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', marginTop: 40, marginBottom: 20 },
-  profileCard: { 
-    backgroundColor: '#fff', padding: 20, borderRadius: 20, elevation: 3,
-    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10
+  container: { flex: 1, backgroundColor: '#fff' },
+  headerContainer: {
+    backgroundColor: '#8b5cf6',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    paddingHorizontal: 25,
+    paddingBottom: 40,
   },
-  name: { fontSize: 22, fontWeight: 'bold' },
-  email: { fontSize: 16, color: 'gray', marginBottom: 10 },
-  roleBadge: { 
-    alignSelf: 'flex-start', backgroundColor: '#8b5cf6', 
-    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, marginBottom: 20 
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 40,
+    marginBottom: 20,
   },
-  roleText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-  idSection: { borderTopWidth: 1, borderColor: '#eee', paddingTop: 15 },
-  connectSection: { borderTopWidth: 1, borderColor: '#eee', paddingTop: 15, paddingBottom: 15 },
-  idLabel: { fontSize: 14, color: 'gray', marginBottom: 8 },
-  inputRow: { flexDirection: 'row', gap: 10 },
-  textInput: { 
-    flex: 1, backgroundColor: '#f9f9f9', padding: 12, 
-    borderRadius: 10, borderWidth: 1, borderColor: '#ddd' 
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
   },
-  connectBtn: { 
-    backgroundColor: '#8b5cf6', padding: 12, 
-    borderRadius: 10, justifyContent: 'center' 
+  editIconButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
   },
-  linkedInfo: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#f0fff4', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#c6f6d5'
+  userInfoSection: {
+    alignItems: 'center',
   },
-  linkedText: { color: '#2f855a', fontWeight: '500' },
-  // 🌟 NEW REMOVE BUTTON STYLES
-  removeBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginTop: 10, padding: 10, borderRadius: 10,
-    backgroundColor: '#fff1f1', borderWidth: 1, borderColor: '#ffcdd2'
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  removeBtnText: { color: '#ff4d4d', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
-  copyBox: { backgroundColor: '#f9f9f9', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' },
-  idText: { fontSize: 14, color: '#333' },
-  testButton: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#8b5cf6', backgroundColor: '#f5f3ff'
+  nameText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
   },
-  testButtonText: { color: '#8b5cf6', fontWeight: 'bold', marginLeft: 10 },
-  logoutButton: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    marginTop: 30, padding: 15, borderRadius: 15, backgroundColor: '#fff', 
-    borderWidth: 1, borderColor: '#ff4d4d'
+  emailText: {
+    fontSize: 14,
+    color: '#E0D7FF',
+    marginBottom: 15,
   },
-  logoutText: { color: '#ff4d4d', fontWeight: 'bold', marginLeft: 10 }
+  roleBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  roleBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 25,
+    paddingTop: 30,
+  },
+  section: {
+    marginBottom: 25,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 10,
+    marginLeft: 5,
+  },
+  monitorCard: {
+    backgroundColor: '#f8fafc',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  monitorName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  actionRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center' },
+  actionText: { fontSize: 14, fontWeight: '600', color: '#8b5cf6' },
+  linkBtn: {
+    backgroundColor: '#8b5cf6',
+    flexDirection: 'row',
+    padding: 18,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+  },
+  linkBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  idBox: {
+    backgroundColor: '#f1f5f9',
+    padding: 15,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderStyle: 'dashed',
+  },
+  idValue: { fontSize: 13, fontWeight: 'bold', color: '#333', flex: 1 },
+  shareBtn: {
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 10,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  btnLogout: {
+    backgroundColor: '#ef4444',
+    flexDirection: 'row',
+    padding: 18,
+    borderRadius: 15,
+    marginTop: 'auto',
+    marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', width: '85%', padding: 30, borderRadius: 25 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  input: { backgroundColor: '#f1f5f9', padding: 15, borderRadius: 12, marginBottom: 20, fontSize: 16 },
+  modalBtns: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cancelBtn: { padding: 10 },
+  saveBtn: { backgroundColor: '#8b5cf6', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 12 }
 });

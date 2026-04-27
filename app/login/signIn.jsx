@@ -4,7 +4,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../config/FirebaseConfig';
-import Colors from '../../Constant/Colors';
 import { setLocalStorage } from '../../service/Storage';
 
 export default function SignIn() {
@@ -126,7 +125,7 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.BACKGROUND || '#F8FAFC',
+    backgroundColor: '#8b5cf6', // New design
     paddingHorizontal: 25,
     justifyContent: 'center',
   },

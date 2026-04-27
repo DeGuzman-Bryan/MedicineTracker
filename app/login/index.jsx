@@ -3,7 +3,8 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Colors from '../../Constant/Colors';
 
 export default function LoginScreen() {
-  const router=useRouter();
+  const router = useRouter();
+  
   return (
     <View style={styles.container}>
       {/* Big Logo */}
@@ -23,8 +24,10 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.button}
-        onPress={()=>router.push('login/signIn')}>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.push('login/signIn')}
+        >
           <Text style={styles.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
@@ -35,7 +38,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#8b5cf6', // New design background color applied here!
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
@@ -51,7 +54,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
     padding: 30,
-    justifyContent: 'space-between', // pushes button to bottom
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   textWrapper: {
@@ -82,7 +85,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
-    marginBottom: 10, // small gap from bottom
+    marginBottom: 10,
   },
   buttonText: {
     textAlign: 'center',

@@ -3,6 +3,9 @@ import { Stack } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+
+// Your new hook import
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { auth } from '../config/FirebaseConfig';
 
 export const unstable_settings = {
@@ -10,6 +13,10 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  // From the new code
+  const colorScheme = useColorScheme();
+
+  // From the old code: Clears session on cold start
   useEffect(() => {
     const clearSessionOnAppLoad = async () => {
       try {

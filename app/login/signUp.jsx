@@ -49,7 +49,7 @@ export default function SignUp() {
         createdAt: new Date(),
       });
 
-      // ✅ Save user in local storage (same key used in SignIn.js)
+      // ✅ Save user in local storage
       await setLocalStorage("userDetails", {
         uid: user.uid,
         email: user.email,
@@ -79,6 +79,7 @@ export default function SignUp() {
       <View style={styles.form}>
       <Text style={styles.title}>Create New Account</Text>
       <Text style={styles.subText}>Join us to start tracking your medications!</Text>
+      
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Full Name</Text>
         <TextInput
@@ -125,6 +126,7 @@ export default function SignUp() {
       <TouchableOpacity style={styles.button} onPress={OnCreateAccount}>
         <Text style={styles.buttonText}>Create Account</Text>
       </TouchableOpacity>
+        
         <View style={styles.textLinkContainer}>
           <Text style={styles.textLink}>
             Already have an account?{' '}
@@ -144,7 +146,7 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   container: {
       flex: 1,
-      backgroundColor: Colors.BACKGROUND || '#F8FAFC',
+      backgroundColor: '#8b5cf6', // New design
       paddingHorizontal: 25,
       justifyContent: 'center',
   },  
