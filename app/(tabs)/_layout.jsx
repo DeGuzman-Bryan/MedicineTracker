@@ -98,15 +98,6 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <FontAwesome name="user" size={24} color={color} /> 
           }} 
         />
-        
-        {/* 🌟 THE FIX: This hides the route from the Tab Bar but lets you still navigate to it! */}
-        <Tabs.Screen 
-          name="add-new-medication/index" 
-          options={{ 
-            href: null 
-          }} 
-        />
-
       </Tabs>
       <Toast />
     </View>

@@ -1,9 +1,9 @@
+import AntDesign from '@expo/vector-icons/AntDesign';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   ImageBackground,
   LayoutAnimation,
@@ -51,7 +51,6 @@ export default function MedicationList({ medList: realTimeMedList = [] }) {
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  // 🌟 FIX 1: This triggers immediately anytime the real-time prop updates!
   useEffect(() => {
     loadMedications(selectedDate);
   }, [selectedDate, realTimeMedList]);
@@ -63,16 +62,11 @@ export default function MedicationList({ medList: realTimeMedList = [] }) {
     }
   }
 
-  // 🌟 FIX 2: Removed "async" and all Firestore updates. 
-  // It is now purely a lightning-fast synchronous filter!
   const loadMedications = (dateToFetch) => {
     const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
-    
-    // Instantly filter the real-time list passed from HomeScreen
     const filteredMeds = realTimeMedList.filter(data => 
       data.dates && data.dates.includes(formattedDate)
     );
-
     setMedList(filteredMeds);
   };
 
@@ -160,10 +154,19 @@ export default function MedicationList({ medList: realTimeMedList = [] }) {
         />
       </View>
 
-      {/* Since data is instantly filtered, we rely on realTimeMedList.length for loading state */}
-      {medList.length === 0 && realTimeMedList.length === 0 ? (
-        <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
-      ) : medList.length === 0 ? (
+      {/* 🌟 NEW HEADER WITH PLUS ICON */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Today's Medication</Text>
+        <TouchableOpacity 
+          style={styles.plusButton} 
+          onPress={() => router.push('/add-new-medication')}
+        >
+          <AntDesign name="plus" size={20} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 🌟 FIXED: No more infinite loading! Immediately shows EmptyState if no meds. */}
+      {medList.length === 0 ? (
         <EmptyState />
       ) : (
         <FlatList
@@ -189,4 +192,24 @@ const styles = StyleSheet.create({
   bannerSubtitle: { fontSize: 12, color: '#fff' },
   dateList: { marginBottom: 10, padding: 5 },
   dateButton: { height: 50, padding: 15, borderRadius: 25, marginRight: 10, justifyContent: 'center', alignItems: 'center', minWidth: 80 },
+  
+  /* 🌟 NEW STYLES FOR HEADER */
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  plusButton: {
+    backgroundColor: '#8b5cf6', // The signature purple color
+    padding: 8,
+    borderRadius: 10,
+  },
 });

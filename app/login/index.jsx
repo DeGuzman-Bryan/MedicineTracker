@@ -9,7 +9,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       {/* Big Logo */}
       <Image
-        source={require('../../assets/images/logo1.png')}
+        source={require('../../assets/images/icon.png')}
         style={styles.image}
         resizeMode="contain"
       />
