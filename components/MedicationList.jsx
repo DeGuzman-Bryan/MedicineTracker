@@ -1,7 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import { arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import moment from 'moment';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -16,7 +14,6 @@ import {
   UIManager,
   View,
 } from 'react-native';
-import { db } from '../config/FirebaseConfig';
 import { GetDateRangeToDisplay } from './../service/ConvertDateTime';
 import EmptyState from './EmptyState';
 import MedicationCardItem from './MedicationCardItem';
@@ -33,11 +30,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function MedicationList() {
+export default function MedicationList({ medList: realTimeMedList = [] }) {
   const [medList, setMedList] = useState([]);
   const [dateRange, setDateRange] = useState([]);
   const [selectedDate, setSelectedDate] = useState(moment().format('MM/DD/YYYY'));
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const alertedMedsRef = useRef(new Set());
@@ -47,14 +43,18 @@ export default function MedicationList() {
   useEffect(() => {
     registerForPushNotificationsAsync();
     setDateRange(GetDateRangeToDisplay());
-    loadMedications(selectedDate);
 
     intervalRef.current = setInterval(() => {
       checkMedicineTimes();
     }, 15000);
 
     return () => clearInterval(intervalRef.current);
-  }, [selectedDate]);
+  }, []);
+
+  // 🌟 FIX 1: This triggers immediately anytime the real-time prop updates!
+  useEffect(() => {
+    loadMedications(selectedDate);
+  }, [selectedDate, realTimeMedList]);
 
   async function registerForPushNotificationsAsync() {
     const { status } = await Notifications.getPermissionsAsync();
@@ -63,56 +63,17 @@ export default function MedicationList() {
     }
   }
 
-  const loadMedications = async (dateToFetch) => {
-    try {
-      setLoading(true);
-      const userStr = await AsyncStorage.getItem('userDetails');
-      const user = userStr ? JSON.parse(userStr) : null;
-      if (!user || !user.email) return;
+  // 🌟 FIX 2: Removed "async" and all Firestore updates. 
+  // It is now purely a lightning-fast synchronous filter!
+  const loadMedications = (dateToFetch) => {
+    const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
+    
+    // Instantly filter the real-time list passed from HomeScreen
+    const filteredMeds = realTimeMedList.filter(data => 
+      data.dates && data.dates.includes(formattedDate)
+    );
 
-      const formattedDate = moment(dateToFetch, 'MM/DD/YYYY').format('MM/DD/YYYY');
-      
-      // 🌟 FIX 1: We only query accessibleBy to prevent Firebase from crashing
-      const q = query(
-        collection(db, 'medication'), 
-        where('accessibleBy', 'array-contains', user.email)
-      );
-
-      const querySnapshot = await getDocs(q);
-      const meds = [];
-      const now = moment();
-
-      for (const docSnap of querySnapshot.docs) {
-        let data = docSnap.data();
-        
-        // 🌟 FIX 2: We filter the dates manually using JavaScript!
-        if (!data.dates || !data.dates.includes(formattedDate)) {
-            continue; // Skip this medicine if it is not scheduled for the selected date
-        }
-
-        const medId = docSnap.id;
-        const existingStatus = data.action?.find(a => a.date === formattedDate);
-        
-        if (!existingStatus) {
-          const medTime = data.reminder || data.time;
-          if (medTime) {
-            const scheduledTime = moment(`${formattedDate} ${medTime}`, 'MM/DD/YYYY hh:mm A');
-            if (now.diff(scheduledTime, 'minutes') >= 60) {
-              const missedAction = { date: formattedDate, status: 'Missed', time: medTime };
-              await updateDoc(doc(db, 'medication', medId), { action: arrayUnion(missedAction) });
-              if (!data.action) data.action = [];
-              data.action.push(missedAction);
-            }
-          }
-        }
-        meds.push({ id: medId, ...data });
-      }
-      setMedList(meds);
-    } catch (e) {
-      console.log('Load Error:', e);
-    } finally {
-      setLoading(false);
-    }
+    setMedList(filteredMeds);
   };
 
   const checkMedicineTimes = () => {
@@ -160,7 +121,6 @@ export default function MedicationList() {
   const handleDatePress = (item) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedDate(item.formattedDate);
-    loadMedications(item.formattedDate);
   };
 
   return (
@@ -200,7 +160,8 @@ export default function MedicationList() {
         />
       </View>
 
-      {loading ? (
+      {/* Since data is instantly filtered, we rely on realTimeMedList.length for loading state */}
+      {medList.length === 0 && realTimeMedList.length === 0 ? (
         <ActivityIndicator size="large" color={'#8b5cf6'} style={{marginTop: 50}} />
       ) : medList.length === 0 ? (
         <EmptyState />

@@ -1,21 +1,16 @@
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useEffect, useState } from 'react';
+import moment from 'moment';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 export default function MedicationCardItem({ medicine, selectedDate = '' }) {
-  const [status, setStatus] = useState(null);
-
-  useEffect(() => {
-    CheckStatus();
-  }, [medicine, selectedDate]);
-
-  const CheckStatus = () => {
-    const data = Array.isArray(medicine?.action) 
-      ? medicine.action.find((item) => item.date === selectedDate) 
-      : null;
-    setStatus(data);
-  };
+  // 🌟 FIX 1: No more useState or useEffect! 
+  // We calculate this instantly every time the component renders.
+  const altDateFormat = selectedDate ? moment(selectedDate, 'MM/DD/YYYY').format('ll') : '';
+  
+  const status = Array.isArray(medicine?.action) 
+    ? medicine.action.find((item) => item.date === selectedDate || item.date === altDateFormat) 
+    : null;
 
   let reminderTime = '';
   if (medicine?.reminder) {
@@ -64,6 +59,7 @@ export default function MedicationCardItem({ medicine, selectedDate = '' }) {
 
       <View style={styles.rightSection}>
         <View style={styles.statusIcon}>
+          {/* 🌟 FIX 2: It reads directly from the instantly calculated variable */}
           {status?.status === 'Taken' ? (
             <FontAwesome name="check-circle" size={24} color={'#4caf50'} />
           ) : status?.status === 'Missed' ? (
