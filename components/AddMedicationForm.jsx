@@ -3,6 +3,7 @@ import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNDateTimePicker from '@react-native-community/datetimepicker';
+import NetInfo from '@react-native-community/netinfo';
 import { Picker } from '@react-native-picker/picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
@@ -13,9 +14,6 @@ import { db } from '../config/FirebaseConfig';
 import { TypeList, WhenToTake } from '../Constant/Options';
 import { FormatDate, getDatesRange } from '../service/ConvertDateTime';
 import { requestPermissions, scheduleMedicationNotification } from '../service/notifications';
-
-// 🌟 NEW IMPORTS FOR OFFLINE SYNC
-import NetInfo from '@react-native-community/netinfo';
 import { addToOfflineQueue } from '../service/OfflineSync';
 
 const { height } = Dimensions.get('window');
@@ -129,22 +127,19 @@ export default function AddMedicationForm() {
       if (permissionGranted) {
           const triggerDate = new Date();
           
-          if (formData.reminderDateObj) {
+          // 🌟 THE FIX: Use moment.js to safely parse the AM/PM regardless of spaces!
+          // This catches "02:30 PM", "2:30PM", "14:30", etc., flawlessly.
+          const cleanTimeStr = formData.reminder.replace(/[\u202F\u00A0]/g, ' ').trim();
+          const parsedTime = moment(cleanTimeStr, ["h:mm A", "hh:mm A", "h:mmA", "hh:mmA", "H:mm"]);
+          
+          if (parsedTime.isValid()) {
+              triggerDate.setHours(parsedTime.hour(), parsedTime.minute(), 0, 0);
+          } else if (formData.reminderDateObj) {
+              // Fallback just in case moment fails, though highly unlikely
               triggerDate.setHours(formData.reminderDateObj.getHours(), formData.reminderDateObj.getMinutes(), 0, 0);
-          } else {
-              const cleanTimeStr = formData.reminder.replace(/[\u202F\u00A0]/g, ' ').trim();
-              const [time, modifier] = cleanTimeStr.split(' '); 
-              let [hours, minutes] = time.split(':');
-              hours = parseInt(hours, 10);
-              minutes = parseInt(minutes, 10);
-              
-              if (modifier) {
-                if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
-                if (modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
-              }
-              triggerDate.setHours(hours, minutes, 0, 0);
           }
 
+          // If the time has already passed for today, schedule it for tomorrow
           if (triggerDate <= new Date()) {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
