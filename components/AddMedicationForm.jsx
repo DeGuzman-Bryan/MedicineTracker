@@ -66,7 +66,7 @@ export default function AddMedicationForm() {
     const docId = isEditing ? params.docId : Date.now().toString();
     
     const userString = await AsyncStorage.getItem('userDetails');
-    const user = JSON.parse(userString);
+    let user = JSON.parse(userString);
 
     if (!formData?.name || !formData?.reminder) {
       Alert.alert('Missing Info', 'Medicine Name and Reminder Time are required.');
@@ -86,31 +86,44 @@ export default function AddMedicationForm() {
       const myEmail = user?.email;
       
       const accessSet = new Set();
-      accessSet.add(myEmail);
+      if (myEmail) accessSet.add(myEmail);
 
+      // 1. Pull from local memory first (Fastest!)
       const localPartner = user?.linkedPatientEmail || user?.linkedCaregiverEmail || user?.patientEmail || user?.caregiverEmail || user?.linkedEmail;
       if (localPartner) accessSet.add(localPartner);
 
-      // 🌟 THE FIX: Bulletproof Deep Lookup checking both sides of the relationship
+      // 2. The Bulletproof Deep Lookup
       try {
           const usersRef = collection(db, 'users');
           
-          // Lookup 1: Find any Caregiver whose 'patientEmail' matches this user
+          // Look for Caregivers watching this Patient
           const q1 = query(usersRef, where('patientEmail', '==', myEmail));
           const snap1 = await getDocs(q1);
-          snap1.forEach((docSnap) => {
-              if (docSnap.data().email) accessSet.add(docSnap.data().email);
+          snap1.forEach(d => { if (d.data().email) accessSet.add(d.data().email); });
+
+          // Look for Patients watched by this Caregiver
+          const q2 = query(usersRef, where('caregiverEmail', '==', myEmail));
+          const snap2 = await getDocs(q2);
+          snap2.forEach(d => { if (d.data().email) accessSet.add(d.data().email); });
+
+          // Check my own document just in case
+          const q3 = query(usersRef, where('email', '==', myEmail));
+          const snap3 = await getDocs(q3);
+          snap3.forEach((docSnap) => {
+              const data = docSnap.data();
+              ['caregiverEmail', 'linkedCaregiverEmail', 'patientEmail', 'linkedPatientEmail'].forEach(key => {
+                  if (data[key]) accessSet.add(data[key]);
+              });
           });
 
-          // Lookup 2: Check the user's OWN document just in case the Caregiver's email is saved there
-          const q2 = query(usersRef, where('email', '==', myEmail));
-          const snap2 = await getDocs(q2);
-          snap2.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (data.caregiverEmail) accessSet.add(data.caregiverEmail);
-              if (data.linkedCaregiverEmail) accessSet.add(data.linkedCaregiverEmail);
-              if (data.patientEmail) accessSet.add(data.patientEmail);
-          });
+          // 🌟 THE FIX: Save the discovered partner to Local Storage! 
+          // This ensures no delays on future saves, completely killing the "late sync" bug.
+          const partnerEmails = Array.from(accessSet).filter(e => e !== myEmail);
+          if (partnerEmails.length > 0) {
+              user.linkedEmail = partnerEmails[0]; 
+              await AsyncStorage.setItem('userDetails', JSON.stringify(user));
+          }
+
       } catch (e) {
           console.log("Deep Lookup Error:", e);
       }
@@ -131,24 +144,19 @@ export default function AddMedicationForm() {
 
       delete dataToSave.reminderDateObj;
 
-      // 1. SET LOCAL DEVICE ALARM FIRST (Works without WiFi)
+      // SET LOCAL DEVICE ALARM
       const permissionGranted = await requestPermissions(); 
       if (permissionGranted) {
           const triggerDate = new Date();
-          
-          // 🌟 THE FIX: Use moment.js to safely parse the AM/PM regardless of spaces!
-          // This catches "02:30 PM", "2:30PM", "14:30", etc., flawlessly.
           const cleanTimeStr = formData.reminder.replace(/[\u202F\u00A0]/g, ' ').trim();
           const parsedTime = moment(cleanTimeStr, ["h:mm A", "hh:mm A", "h:mmA", "hh:mmA", "H:mm"]);
           
           if (parsedTime.isValid()) {
               triggerDate.setHours(parsedTime.hour(), parsedTime.minute(), 0, 0);
           } else if (formData.reminderDateObj) {
-              // Fallback just in case moment fails, though highly unlikely
               triggerDate.setHours(formData.reminderDateObj.getHours(), formData.reminderDateObj.getMinutes(), 0, 0);
           }
 
-          // If the time has already passed for today, schedule it for tomorrow
           if (triggerDate <= new Date()) {
               triggerDate.setDate(triggerDate.getDate() + 1);
           }
@@ -156,17 +164,13 @@ export default function AddMedicationForm() {
           await scheduleMedicationNotification(
               formData.name,
               `Dose: ${formData.dose || 'Take your medicine'}`,
-              {
-                  hour: triggerDate.getHours(),
-                  minute: triggerDate.getMinutes()
-              }
+              { hour: triggerDate.getHours(), minute: triggerDate.getMinutes() }
           );
       }
 
-      // 2. CHECK WIFI CONNECTION
+      // CHECK WIFI AND SAVE
       const state = await NetInfo.fetch();
       if (!state.isConnected) {
-          // No WiFi? Save it to our local offline queue!
           const actionType = isEditing ? 'UPDATE_MED' : 'ADD';
           await addToOfflineQueue(actionType, { docId, data: dataToSave });
           
@@ -176,7 +180,6 @@ export default function AddMedicationForm() {
           return; 
       }
 
-      // 3. WIFI IS ON -> SAVE DIRECTLY TO DATABASE
       if (isEditing) {
         await updateDoc(docRef, dataToSave);
       } else {
