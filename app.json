@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MedicineTracker",
-    "slug": "MedicineTracker",
+    "name": "Medaily",
+    "slug": "Medaily",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

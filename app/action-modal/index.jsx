@@ -1,19 +1,16 @@
-import AntDesign from '@expo/vector-icons/AntDesign';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { AntDesign, Ionicons } from '@expo/vector-icons';
 import NetInfo from '@react-native-community/netinfo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
-import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, SafeAreaView, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
 import { addToOfflineQueue } from '../../service/OfflineSync';
 import { getLocalStorage } from '../../service/Storage';
-// 🌟 ADDED IMPORT FOR NOTIFICATIONS
 import { sendImmediateNotification } from '../../service/notifications';
 
 export default function ActionModal() {
-  const medicine = useLocalSearchParams(); 
+  const medicine = useLocalSearchParams();
   const { selectedDate, reminder, docId, name } = medicine;
   const router = useRouter();
 
@@ -23,37 +20,41 @@ export default function ActionModal() {
       return;
     }
 
-    Alert.alert('Delete Medication', 'Are you sure?', [
+    Alert.alert('Delete Medication', 'Are you sure you want to remove this?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
           try {
             // 🌟 CHECK WIFI FIRST
             const state = await NetInfo.fetch();
             if (!state.isConnected) {
-               await addToOfflineQueue('DELETE', { docId });
-               ToastAndroid.show("Saved offline. Will delete when connected.", ToastAndroid.SHORT);
-               router.replace('(tabs)'); 
-               return;
+              await addToOfflineQueue('DELETE', { docId });
+              ToastAndroid.show('Saved offline. Will delete when connected.', ToastAndroid.SHORT);
+              router.replace('(tabs)');
+              return;
             }
 
             await deleteDoc(doc(db, 'medication', docId));
-            ToastAndroid.show("Deleted successfully", ToastAndroid.SHORT);
-            router.replace('(tabs)'); 
-          } catch (e) { 
-            console.error("Delete Error:", e);
-            Alert.alert('Error', 'Could not delete.'); 
+            ToastAndroid.show('Deleted successfully', ToastAndroid.SHORT);
+            router.replace('(tabs)');
+          } catch (e) {
+            console.error('Delete Error:', e);
+            Alert.alert('Error', 'Could not delete.');
           }
-      }},
+        },
+      },
     ]);
   };
 
   const onEditPress = () => {
     router.push({
       pathname: '/add-new-medication',
-      params: { 
+      params: {
         ...medicine,
-        type: typeof medicine.type === 'object' ? JSON.stringify(medicine.type) : medicine.type 
-      }
+        type: typeof medicine.type === 'object' ? JSON.stringify(medicine.type) : medicine.type,
+      },
     });
   };
 
@@ -65,11 +66,11 @@ export default function ActionModal() {
 
     try {
       const user = await getLocalStorage('userDetails');
-      const actionData = { 
-        status, 
-        time: moment().format('LT'), 
+      const actionData = {
+        status,
+        time: moment().format('LT'),
         date: typeof selectedDate === 'string' ? selectedDate : moment().format('ll'),
-        by: user?.email || 'Unknown' 
+        by: user?.email || 'Unknown',
       };
 
       const medName = name ? name : 'your medicine';
@@ -77,14 +78,14 @@ export default function ActionModal() {
       // 🌟 CHECK WIFI FIRST
       const state = await NetInfo.fetch();
       if (!state.isConnected) {
-         await addToOfflineQueue('UPDATE_ACTION', { docId, actionData });
-         ToastAndroid.show(`Saved ${status} offline. Will sync when connected.`, ToastAndroid.SHORT);
-         
-         // 🌟 NOTIFICATION TRIGGER (OFFLINE)
-         await sendImmediateNotification(`💊 ${medName} Update`, `You marked this as ${status} (Saved Offline).`);
-         
-         router.replace('(tabs)');
-         return;
+        await addToOfflineQueue('UPDATE_ACTION', { docId, actionData });
+        ToastAndroid.show(`Saved ${status} offline. Will sync when connected.`, ToastAndroid.SHORT);
+
+        // 🌟 NOTIFICATION TRIGGER (OFFLINE)
+        await sendImmediateNotification(`💊 ${medName} Update`, `You marked this as ${status} (Saved Offline).`);
+
+        router.replace('(tabs)');
+        return;
       }
 
       const docRef = doc(db, 'medication', docId);
@@ -95,9 +96,9 @@ export default function ActionModal() {
       await sendImmediateNotification(`💊 ${medName} Update`, `You successfully marked this as ${status}.`);
 
       router.replace('(tabs)');
-    } catch (e) { 
-      console.error("Update Error:", e);
-      Alert.alert('Error', 'Failed to update.'); 
+    } catch (e) {
+      console.error('Update Error:', e);
+      Alert.alert('Error', 'Failed to update.');
     }
   };
 
@@ -108,7 +109,9 @@ export default function ActionModal() {
       const seconds = parseInt(match[1]);
       const date = new Date(seconds * 1000);
       return date.toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', hour12: true,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
       });
     }
     return reminderStr;
@@ -116,53 +119,145 @@ export default function ActionModal() {
 
   return (
     <View style={styles.container}>
-      <Image 
-        source={require('../../assets/images/notification.gif')} 
-        style={styles.image} 
-      />
-      
-      <Text style={styles.dateText}>{selectedDate}</Text>
-      <Text style={styles.reminderText}>{formatReminderTime(reminder)}</Text>
-      <Text style={styles.subText}>It's time to take {name ? name : 'your medicine'}</Text>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Top Header Row with Minimal Icons */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+            <Ionicons name="close" size={28} color="#666" />
+          </TouchableOpacity>
+          <View style={styles.rightActions}>
+            <TouchableOpacity onPress={onEditPress} style={styles.iconBtn}>
+              <AntDesign name="edit" size={20} color="#8b5cf6" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onDeletePress} style={[styles.iconBtn, { marginLeft: 12 }]}>
+              <AntDesign name="delete" size={20} color="#ff4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      <View style={styles.buttonRow}>
-       
-        <TouchableOpacity style={styles.takenBtn} onPress={() => UpdateActionStatus('Taken')}>
-          <AntDesign name="check" size={22} color="white" />
-          <Text style={styles.takenText}>Taken</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.content}>
+          <View style={styles.infoCard}>
+            <View style={styles.imageContainer}>
+              <Image
+                source={require('../../assets/images/notification.gif')}
+                style={styles.image}
+              />
+            </View>
+            <Text style={styles.dateLabel}>{selectedDate}</Text>
+            <Text style={styles.timeText}>{formatReminderTime(reminder)}</Text>
+            <Text style={styles.medicationName}>{name || 'Medication Name'}</Text>
+            <Text style={styles.subText}>It's time for your scheduled dose.</Text>
+          </View>
 
-      <TouchableOpacity style={styles.editBtn} onPress={onEditPress}>
-        <AntDesign name="edit" size={22} color="#007AFF" />
-        <Text style={styles.editText}>Edit Medication</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.deleteBtn} onPress={onDeletePress}>
-        <MaterialIcons name="delete-forever" size={24} color="#ff4444" />
-        <Text style={styles.deleteText}>Delete Medication</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.back()} style={{ position: 'absolute', bottom: 50 }}>
-        <FontAwesome name="close" size={44} color="gray" />
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.takenBtn}
+            onPress={() => UpdateActionStatus('Taken')}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="white" />
+            <Text style={styles.takenText}>Mark as Taken</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 25, flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  image: { width: 120, height: 120 },
-  dateText: { marginTop: 20, fontSize: 16, color: '#555' },
-  reminderText: { fontSize: 32, fontWeight: 'bold', color: '#222', marginVertical: 10, textAlign: 'center' },
-  subText: { fontSize: 18, color: '#444', marginBottom: 25 },
-  buttonRow: { flexDirection: 'row', gap: 15 },
-  missedBtn: { padding: 12, flexDirection: 'row', borderWidth: 2, borderColor: 'red', borderRadius: 10, gap: 6, alignItems: 'center' },
-  missedText: { color: 'red', fontWeight: 'bold', fontSize: 18 },
-  takenBtn: { padding: 12, flexDirection: 'row', backgroundColor: '#3dd474ff', borderRadius: 10, gap: 6, alignItems: 'center' },
-  takenText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  editBtn: { marginTop: 30, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  editText: { color: '#007AFF', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { marginTop: 15, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  deleteText: { color: '#ff4444', fontSize: 17, fontWeight: 'bold' }
+  container: {
+    flex: 1,
+    backgroundColor: '#f3f1ff',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  rightActions: {
+    flexDirection: 'row',
+  },
+  closeBtn: {
+    padding: 8,
+  },
+  iconBtn: {
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    justifyContent: 'center',
+  },
+  imageContainer: {
+    marginBottom: 30,
+  },
+  image: {
+    width: 140,
+    height: 140,
+  },
+  infoCard: {
+    backgroundColor: 'white',
+    width: '100%',
+    padding: 30,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginBottom: 40,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  dateLabel: {
+    fontSize: 16,
+    color: '#8b5cf6',
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  timeText: {
+    fontSize: 38,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 10,
+  },
+  medicationName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4b5563',
+    textAlign: 'center',
+  },
+  subText: {
+    fontSize: 15,
+    color: '#9ca3af',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  takenBtn: {
+    backgroundColor: '#8b5cf6',
+    flexDirection: 'row',
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    elevation: 3,
+  },
+  takenText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginLeft: 10,
+  },
 });
