@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'; // 🌟 Added Icon import
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -11,6 +12,7 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showPassword, setShowPassword] = useState(false); // 🌟 Added state for password visibility
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -93,13 +95,26 @@ export default function SignIn() {
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Enter your password"
-            style={styles.textInput}
-            secureTextEntry
-            onChangeText={setPassword}
-            value={password}
-          />
+          {/* 🌟 Updated Password Input Container */}
+          <View style={styles.passwordContainer}>
+            <TextInput
+              placeholder="Enter your password"
+              style={styles.passwordInput}
+              secureTextEntry={!showPassword} // Toggles between true/false
+              onChangeText={setPassword}
+              value={password}
+            />
+            <TouchableOpacity 
+              style={styles.eyeIcon} 
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons 
+                name={showPassword ? 'eye-off' : 'eye'} 
+                size={22} 
+                color="gray" 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.button} onPress={onSignInClick}>
@@ -125,7 +140,7 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#8b5cf6', // New design
+    backgroundColor: '#8b5cf6', 
     paddingHorizontal: 25,
     justifyContent: 'center',
   },
@@ -177,6 +192,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#F9FAFB',
   },
+  /* 🌟 New styles for the password field with eye icon */
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.3,
+    borderColor: '#D1D5DB',
+    borderRadius: 50,
+    backgroundColor: '#F9FAFB',
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 14,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 14,
+  },
+  /* ------------------------------------------------- */
   button: {
     backgroundColor: '#8b5cf6',
     paddingVertical: 15,

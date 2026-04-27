@@ -126,10 +126,7 @@ export default function ActionModal() {
       <Text style={styles.subText}>It's time to take {name ? name : 'your medicine'}</Text>
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.missedBtn} onPress={() => UpdateActionStatus('Missed')}>
-          <AntDesign name="close" size={22} color="red" />
-          <Text style={styles.missedText}>Missed</Text>
-        </TouchableOpacity>
+       
         <TouchableOpacity style={styles.takenBtn} onPress={() => UpdateActionStatus('Taken')}>
           <AntDesign name="check" size={22} color="white" />
           <Text style={styles.takenText}>Taken</Text>
