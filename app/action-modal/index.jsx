@@ -7,8 +7,10 @@ import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment';
 import { Alert, Image, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { db } from '../../config/FirebaseConfig';
-import { addToOfflineQueue } from '../../service/OfflineSync'; // 🌟 ADDED IMPORT
+import { addToOfflineQueue } from '../../service/OfflineSync';
 import { getLocalStorage } from '../../service/Storage';
+// 🌟 ADDED IMPORT FOR NOTIFICATIONS
+import { sendImmediateNotification } from '../../service/notifications';
 
 export default function ActionModal() {
   const medicine = useLocalSearchParams(); 
@@ -70,11 +72,17 @@ export default function ActionModal() {
         by: user?.email || 'Unknown' 
       };
 
+      const medName = name ? name : 'your medicine';
+
       // 🌟 CHECK WIFI FIRST
       const state = await NetInfo.fetch();
       if (!state.isConnected) {
          await addToOfflineQueue('UPDATE_ACTION', { docId, actionData });
          ToastAndroid.show(`Saved ${status} offline. Will sync when connected.`, ToastAndroid.SHORT);
+         
+         // 🌟 NOTIFICATION TRIGGER (OFFLINE)
+         await sendImmediateNotification(`💊 ${medName} Update`, `You marked this as ${status} (Saved Offline).`);
+         
          router.replace('(tabs)');
          return;
       }
@@ -82,6 +90,9 @@ export default function ActionModal() {
       const docRef = doc(db, 'medication', docId);
       await updateDoc(docRef, { action: arrayUnion(actionData) });
       ToastAndroid.show(`Marked as ${status}`, ToastAndroid.SHORT);
+
+      // 🌟 NOTIFICATION TRIGGER (ONLINE)
+      await sendImmediateNotification(`💊 ${medName} Update`, `You successfully marked this as ${status}.`);
 
       router.replace('(tabs)');
     } catch (e) { 

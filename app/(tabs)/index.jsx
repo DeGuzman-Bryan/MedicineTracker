@@ -16,14 +16,13 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [medList, setMedList] = useState([]);
   
-  // Network States for the Banner
   const [isOffline, setIsOffline] = useState(false);
   const [showOnlineMsg, setShowOnlineMsg] = useState(false);
   
   const router = useRouter();
   const currentUserEmail = useRef(null); 
-  const hasCheckedMissed = useRef(false); // Fixes the notification spam!
-  const wasOffline = useRef(false); // Remembers if they were disconnected
+  const hasCheckedMissed = useRef(false); 
+  const wasOffline = useRef(false); 
 
   const parseTime = (reminderStr) => {
     if (!reminderStr) return null;
@@ -81,7 +80,6 @@ export default function HomeScreen() {
   useEffect(() => {
     let unsubscribe;
     
-    // Check immediately when the app opens
     NetInfo.fetch().then(state => {
       if (state.isConnected === false) {
         setIsOffline(true);
@@ -89,7 +87,6 @@ export default function HomeScreen() {
       }
     });
 
-    // Listen for network changes (Wi-Fi or Mobile Data)
     const unsubscribeNet = NetInfo.addEventListener(state => {
       if (state.isConnected === false) {
         setIsOffline(true);
@@ -136,17 +133,20 @@ export default function HomeScreen() {
       unsubscribe = onSnapshot(q, (snapshot) => {
         const meds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
+        // 🌟 THIS IS THE BULLETPROOF LISTENER FOR BOTH USERS
         snapshot.docChanges().forEach((change) => {
           if (change.type === "modified") {
             const data = change.doc.data();
-            const actionArray = data.action;
+            const actionArray = data.action || [];
             
-            if (actionArray && actionArray.length > 0) {
+            if (actionArray.length > 0) {
               const lastAction = actionArray[actionArray.length - 1];
               
-              if (lastAction.by && lastAction.by !== 'System' && lastAction.by !== currentUserEmail.current) {
-                const userName = lastAction.by.split('@')[0];
+              // As long as a status exists and it wasn't the auto-system, trigger the notification!
+              if (lastAction.status && lastAction.by !== 'System') {
+                const userName = lastAction.by ? lastAction.by.split('@')[0] : 'Your partner';
                 const medName = data.name ? data.name : 'a medication';
+                
                 sendImmediateNotification(
                   `💊 ${medName} Update`,
                   `${userName} marked this medication as ${lastAction.status}.`
@@ -156,7 +156,6 @@ export default function HomeScreen() {
           }
         });
 
-        // Ensure missed notification check only runs once
         if (!hasCheckedMissed.current) {
            checkAndMarkMissedMedications(meds);
            hasCheckedMissed.current = true;
@@ -182,8 +181,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      
-      {/* Offline / Online Banners */}
       {isOffline && (
         <View style={[styles.networkBanner, { backgroundColor: '#ef4444' }]}>
           <Text style={styles.networkText}>You are currently offline</Text>
@@ -207,7 +204,7 @@ const styles = StyleSheet.create({
   networkBanner: {
     padding: 12,
     borderRadius: 10,
-    marginTop: 30, // Pushes the banner down below the phone's status bar
+    marginTop: 30, 
     marginBottom: 15,
     alignItems: 'center',
     justifyContent: 'center',
