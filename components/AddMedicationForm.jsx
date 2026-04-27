@@ -91,16 +91,25 @@ export default function AddMedicationForm() {
       const localPartner = user?.linkedPatientEmail || user?.linkedCaregiverEmail || user?.patientEmail || user?.caregiverEmail || user?.linkedEmail;
       if (localPartner) accessSet.add(localPartner);
 
+      // 🌟 THE FIX: Bulletproof Deep Lookup checking both sides of the relationship
       try {
           const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('patientEmail', '==', myEmail));
-          const querySnapshot = await getDocs(q);
           
-          querySnapshot.forEach((docSnap) => {
-              const caregiverData = docSnap.data();
-              if (caregiverData.email) {
-                  accessSet.add(caregiverData.email);
-              }
+          // Lookup 1: Find any Caregiver whose 'patientEmail' matches this user
+          const q1 = query(usersRef, where('patientEmail', '==', myEmail));
+          const snap1 = await getDocs(q1);
+          snap1.forEach((docSnap) => {
+              if (docSnap.data().email) accessSet.add(docSnap.data().email);
+          });
+
+          // Lookup 2: Check the user's OWN document just in case the Caregiver's email is saved there
+          const q2 = query(usersRef, where('email', '==', myEmail));
+          const snap2 = await getDocs(q2);
+          snap2.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data.caregiverEmail) accessSet.add(data.caregiverEmail);
+              if (data.linkedCaregiverEmail) accessSet.add(data.linkedCaregiverEmail);
+              if (data.patientEmail) accessSet.add(data.patientEmail);
           });
       } catch (e) {
           console.log("Deep Lookup Error:", e);
